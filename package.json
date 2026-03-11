@@ -1,0 +1,19 @@
+{
+  "name": "deskcritter",
+  "version": "0.1.0",
+  "description": "Monigote compañero de escritorio",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarcosRehtanz/deskcritter.git"
+  },
+  "author": "MarcosRehtanz",
+  "license": "MIT",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1"
+  }
+}
