@@ -6,6 +6,8 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position"
   ]
 }

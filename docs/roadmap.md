@@ -1,12 +1,12 @@
 # Roadmap
 
 ## Fase 1 — Base funcional ← ACTUAL
-- [ ] Inicializar proyecto Tauri
+- [x] Inicializar proyecto Tauri
 - [ ] Ventana transparente sin bordes, always on top
-- [ ] Cargar y renderizar sprite en Canvas
-- [ ] Idle animations (parpadeo, respiración, mirar alrededor)
-- [ ] Seguimiento del cursor
-- [ ] Drag & drop del monigote
+- [x] Cargar y renderizar sprite en Canvas (placeholder activo, falta sprite sheet real)
+- [x] Idle animations (parpadeo, respiración, mirar alrededor)
+- [x] Seguimiento del cursor
+- [x] Drag & drop del monigote
 
 ## Fase 2 — Movimiento libre
 - [ ] Físicas básicas (gravedad, colisión con bordes de pantalla)

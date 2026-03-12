@@ -92,10 +92,9 @@ document.addEventListener('mousemove', async (e) => {
 
   // Mover la ventana Tauri
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    const win = getCurrentWindow();
+    const win = window.__TAURI__.window.getCurrentWindow();
     const pos = await win.outerPosition();
-    await win.setPosition({ type: 'Physical', x: pos.x + deltaX, y: pos.y + deltaY });
+    await win.setPosition(new window.__TAURI__.window.PhysicalPosition(pos.x + deltaX, pos.y + deltaY));
   } catch {
     // Fallback si no estamos en Tauri (desarrollo en navegador)
   }
