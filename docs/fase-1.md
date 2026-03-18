@@ -10,14 +10,14 @@ Monigote visible en pantalla con animaciones básicas e interacción mínima.
 - Configurar ventana: transparent, decorations false, always_on_top
 - `withGlobalTauri: true` habilitado para acceder a la API sin bundler
 
-### 2. Sistema de sprites ✅ (parcial)
+### 2. Sistema de sprites ✅
 - Definir formato de sprite sheet (PNG, frames horizontales)
 - Loader de sprite sheets en JS (`SpriteAnimator` en `src/js/sprite.js`)
 - Clase `SpriteAnimator` con:
   - play(animationName)
   - update(deltaTime)
   - draw(context)
-- **Pendiente:** sprite sheet real (`assets/critter.png`), actualmente usa placeholder dibujado con Canvas
+- Sprite sheet real en `assets/critter.png` (128×160, 5 filas × 4 columnas de 32×32)
 
 ### 3. Máquina de estados ✅
 - Estados implementados: `idle`, `blink`, `look_left`, `look_right`, `drag`

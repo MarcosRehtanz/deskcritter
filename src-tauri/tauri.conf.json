@@ -11,8 +11,8 @@
     "windows": [
       {
         "title": "deskcritter",
-        "width": 256,
-        "height": 256,
+        "width": 96,
+        "height": 96,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,
