@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>deskcritter — Configuración</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      color: #ccc;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+    }
+
+    /* --- Layout principal --- */
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .cp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #16213e;
+      font-size: 14px;
+      font-weight: bold;
+      color: #eee;
+      cursor: move;
+      flex-shrink: 0;
+    }
+    .cp-header button {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .cp-header button:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+    .cp-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* --- Menú lateral --- */
+    .cp-sidebar {
+      width: 160px;
+      background: #151528;
+      border-right: 1px solid #2a2a4a;
+      padding: 8px 0;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .cp-sidebar button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, color 0.15s;
+    }
+    .cp-sidebar button:hover {
+      background: rgba(255,255,255,0.05);
+      color: #bbb;
+    }
+    .cp-sidebar button.active {
+      background: rgba(91,187,136,0.1);
+      color: #5bb;
+      border-left: 2px solid #5bb;
+    }
+    .cp-sidebar button .icon {
+      font-size: 15px;
+      width: 20px;
+      text-align: center;
+    }
+
+    /* --- Contenido (paneles) --- */
+    .cp-content {
+      flex: 1;
+      padding: 20px 24px;
+      overflow-y: auto;
+    }
+
+    .cp-page {
+      display: none;
+    }
+    .cp-page.active {
+      display: block;
+    }
+
+    .cp-page-title {
+      font-size: 15px;
+      font-weight: bold;
+      color: #eee;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+
+    /* --- Campos del formulario --- */
+    .cp-field {
+      margin-bottom: 14px;
+    }
+    .cp-field label {
+      display: block;
+      color: #aaa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 4px;
+    }
+    .cp-field input[type="text"],
+    .cp-field select {
+      display: block;
+      width: 100%;
+      padding: 7px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ddd;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .cp-field input[type="text"]:focus,
+    .cp-field select:focus {
+      outline: none;
+      border-color: #5b8;
+    }
+
+    .cp-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .cp-toggle input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+    }
+    .cp-toggle span {
+      color: #ccc;
+      font-size: 13px;
+    }
+
+    .cp-row {
+      display: flex;
+      gap: 16px;
+    }
+    .cp-row .cp-field {
+      flex: 1;
+    }
+
+    .cp-status {
+      margin: 4px 0 10px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .cp-status.connected {
+      color: #4caf50;
+      background: rgba(76,175,80,0.1);
+    }
+    .cp-status.disconnected {
+      color: #f44336;
+      background: rgba(244,67,54,0.1);
+    }
+
+    .cp-btn {
+      padding: 8px 16px;
+      background: #2a2a4a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      color: #ccc;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .cp-btn:hover { background: #3a3a5a; }
+    .cp-btn.saved { background: #2a4a3a; border-color: #5b8; color: #5b8; }
+
+    /* --- Personaje --- */
+    .cp-sprite-upload {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cp-sprite-filename {
+      color: #888;
+      font-size: 11px;
+      font-style: italic;
+    }
+    .cp-sprite-info {
+      margin: 12px 0;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #2a2a4a;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #888;
+      line-height: 1.6;
+    }
+    .cp-sprite-info p {
+      margin-bottom: 6px;
+      color: #aaa;
+    }
+    .cp-sprite-info ul {
+      padding-left: 18px;
+    }
+    .cp-sprite-info b {
+      color: #bbb;
+    }
+    .cp-sprite-preview-box {
+      margin-top: 12px;
+    }
+    .cp-sprite-preview-box label {
+      display: block;
+      color: #aaa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
+    .cp-sprite-preview {
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 8px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cp-sprite-preview img {
+      image-rendering: pixelated;
+      max-width: 100%;
+      max-height: 200px;
+    }
+    .cp-sprite-error {
+      color: #f44336;
+      font-size: 11px;
+      margin-top: 6px;
+      min-height: 14px;
+    }
+
+    /* --- Lista de personajes --- */
+    .cp-char-list {
+      list-style: none;
+      margin: 12px 0;
+      padding: 0;
+    }
+    .cp-char-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .cp-char-item.active {
+      border-color: #5b8;
+    }
+    .cp-char-thumb {
+      width: 32px;
+      height: 32px;
+      image-rendering: pixelated;
+      border-radius: 2px;
+      background: #1a1a2e;
+      object-fit: contain;
+    }
+    .cp-char-name {
+      flex: 1;
+      font-size: 12px;
+      color: #ccc;
+    }
+    .cp-char-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .cp-char-actions button {
+      background: none;
+      border: 1px solid #444;
+      border-radius: 3px;
+      color: #aaa;
+      font-size: 11px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .cp-char-actions button:hover { color: #fff; border-color: #666; }
+    .cp-char-actions button.active-btn { color: #5b8; border-color: #5b8; }
+    .cp-char-actions button.delete-btn:hover { color: #f44; border-color: #f44; }
+
+    .cp-new-char {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .cp-new-char input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ddd;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .cp-new-char input[type="text"]:focus {
+      outline: none;
+      border-color: #5b8;
+    }
+
+    /* --- Range sliders --- */
+    .cp-range {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 3px;
+      outline: none;
+      margin-top: 4px;
+    }
+    .cp-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #5b8;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .cp-range:hover::-webkit-slider-thumb {
+      background: #6cc;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="cp-header" data-tauri-drag-region>
+      <span data-tauri-drag-region>Configuración</span>
+      <button id="cp-close">&times;</button>
+    </div>
+    <div class="cp-main">
+
+      <!-- Menú lateral -->
+      <nav class="cp-sidebar">
+        <button class="active" data-page="conexion">
+          <span class="icon">&#128279;</span> Conexión
+        </button>
+        <button data-page="personaje">
+          <span class="icon">&#128054;</span> Personaje
+        </button>
+        <button data-page="voz">
+          <span class="icon">&#127908;</span> Voz
+        </button>
+        <button data-page="fisica">
+          <span class="icon">&#9881;</span> Física
+        </button>
+        <button data-page="comportamiento">
+          <span class="icon">&#128062;</span> Comportamiento
+        </button>
+        <button data-page="apariencia">
+          <span class="icon">&#127912;</span> Apariencia
+        </button>
+        <button data-page="atajos">
+          <span class="icon">&#9000;</span> Atajos
+        </button>
+        <button data-page="avanzado">
+          <span class="icon">&#128295;</span> Avanzado
+        </button>
+        <button data-page="sonidos">
+          <span class="icon">&#128266;</span> Sonidos
+        </button>
+        <button data-page="api">
+          <span class="icon">&#128268;</span> API
+        </button>
+        <button data-page="plugins">
+          <span class="icon">&#129520;</span> Plugins
+        </button>
+      </nav>
+
+      <!-- Contenido -->
+      <div class="cp-content">
+
+        <!-- Página: Personaje -->
+        <div class="cp-page" id="page-personaje">
+          <div class="cp-page-title">Personaje</div>
+
+          <label style="color:#aaa;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;">Personajes guardados</label>
+          <ul class="cp-char-list" id="cp-char-list">
+            <!-- Se llena dinámicamente -->
+          </ul>
+
+          <div class="cp-new-char">
+            <input type="text" id="cp-new-char-name" placeholder="Nombre del personaje">
+            <button class="cp-btn" id="cp-new-char-file-btn">Seleccionar PNG...</button>
+            <input type="file" id="cp-new-char-file" accept="image/png" style="display:none">
+          </div>
+          <div class="cp-sprite-error" id="cp-sprite-error"></div>
+
+          <div class="cp-sprite-info">
+            <p><b>Formato del sprite sheet:</b></p>
+            <p>Una imagen PNG donde cada fila es una animaci&oacute;n y cada columna es un frame.
+               Todos los frames deben ser de <b>32&times;32 px</b>.</p>
+            <ul>
+              <li>Ancho y alto m&uacute;ltiplos de 32</li>
+              <li>M&iacute;nimo <b>128&times;160 px</b> (4 columnas &times; 5 filas)</li>
+            </ul>
+            <p><b>Filas obligatorias:</b></p>
+            <ul>
+              <li>Fila 0 &mdash; <b>idle</b>: animaci&oacute;n de reposo (loop)</li>
+              <li>Fila 1 &mdash; <b>blink</b>: parpadeo (se reproduce una vez)</li>
+              <li>Fila 2 &mdash; <b>look_left</b>: mirar a la izquierda</li>
+              <li>Fila 3 &mdash; <b>look_right</b>: mirar a la derecha</li>
+              <li>Fila 4 &mdash; <b>drag</b>: siendo arrastrado / cayendo</li>
+            </ul>
+            <p><b>Filas opcionales (para emociones):</b></p>
+            <ul>
+              <li>Fila 5 &mdash; <b>sleep</b>: dormido (idle prolongado)</li>
+              <li>Fila 6 &mdash; <b>wave</b>: saludar (al conectar)</li>
+              <li>Fila 7 &mdash; <b>celebrate</b>: celebrar (respuesta recibida)</li>
+              <li>Fila 8 &mdash; <b>think</b>: pensando (esperando respuesta)</li>
+              <li>Fila 9 &mdash; <b>sad</b>: triste (desconectado)</li>
+            </ul>
+            <p>Si una fila opcional no existe, se usa un fallback autom&aacute;tico
+               (think&rarr;blink, celebrate&rarr;idle r&aacute;pido, etc).</p>
+          </div>
+
+          <div class="cp-sprite-preview-box">
+            <label>Vista previa (activo)</label>
+            <div class="cp-sprite-preview" id="cp-sprite-preview"></div>
+          </div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn" id="cp-sprite-reset">Usar default (sin personaje)</button>
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+        <!-- Página: Conexión -->
+        <div class="cp-page active" id="page-conexion">
+          <div class="cp-page-title">Conexión</div>
+
+          <!-- Conexión directa (fallback si no hay credenciales nodriza) -->
+          <div class="cp-field">
+            <label>Server URL (directo)</label>
+            <input type="text" id="cp-server-url" spellcheck="false">
+          </div>
+
+          <!-- Nodriza P2P (si hay ID + Key, se conecta automáticamente) -->
+          <div style="margin:12px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Nodriza (P2P)</div>
+          <div style="margin-bottom:12px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid #2a2a4a; border-radius:4px;">
+            <div class="cp-field">
+              <label>URL de Nodriza</label>
+              <input type="text" id="cp-nodriza-url" spellcheck="false" placeholder="ws://localhost:3000/signaling">
+            </div>
+            <div class="cp-field">
+              <label>Client ID</label>
+              <input type="text" id="cp-nodriza-client-id" spellcheck="false" placeholder="(vacío = conexión directa)">
+            </div>
+            <div class="cp-field">
+              <label>API Key</label>
+              <input type="text" id="cp-nodriza-api-key" spellcheck="false" placeholder="(vacío = conexión directa)">
+            </div>
+          </div>
+
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Provider</label>
+              <input type="text" id="cp-provider" spellcheck="false" placeholder="(auto)">
+            </div>
+            <div class="cp-field">
+              <label>Model</label>
+              <input type="text" id="cp-model" spellcheck="false" placeholder="(auto)">
+            </div>
+          </div>
+          <div class="cp-field">
+            <label>Agent Key</label>
+            <input type="text" id="cp-agent-key" spellcheck="false" placeholder="(auto)">
+          </div>
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Modo offline</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-offline-queue-enabled">
+            <span>Encolar mensajes cuando est&aacute; offline</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Si el critter pierde conexi&oacute;n, los mensajes que escribas se guardan y se
+            env&iacute;an autom&aacute;ticamente cuando se reconecte.
+          </div>
+          <div class="cp-field">
+            <label>Intentos de reconexi&oacute;n antes de modo offline</label>
+            <input type="text" id="cp-offline-max-retries" inputmode="numeric" placeholder="5">
+          </div>
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Indicador</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-conn-badge-enabled">
+            <span>Mostrar indicador de conexi&oacute;n</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Muestra un punto de color sobre el critter: verde = conectado, rojo = desconectado.
+            Pas&aacute; el mouse encima para ver si usa WebSocket directo o P2P (nodriza).
+          </div>
+          <div class="cp-status disconnected" id="cp-conn-status">desconectado</div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn" id="cp-reconnect">Reconectar</button>
+          </div>
+        </div>
+
+        <!-- Página: Voz -->
+        <div class="cp-page" id="page-voz">
+          <div class="cp-page-title">Voz</div>
+
+          <div style="margin:0 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Entrada (STT)</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-audio-enabled">
+            <span>Micrófono habilitado</span>
+          </div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-whisper-local">
+            <span>Transcripción local (Whisper)</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Desactivar para enviar audio al server (ahorra ~800MB RAM)
+          </div>
+          <div class="cp-field">
+            <label>Modelo Whisper</label>
+            <select id="cp-whisper-model">
+              <option value="Xenova/whisper-tiny">Tiny (~600 MB, más rápido)</option>
+              <option value="Xenova/whisper-base">Base (~800 MB, recomendado)</option>
+              <option value="Xenova/whisper-small">Small (~1.4 GB, más preciso)</option>
+            </select>
+          </div>
+          <div class="cp-field">
+            <label>Idioma de transcripción</label>
+            <select id="cp-whisper-lang">
+              <option value="es">Español (es)</option>
+              <option value="en">English (en)</option>
+              <option value="fr">Français (fr)</option>
+              <option value="de">Deutsch (de)</option>
+              <option value="it">Italiano (it)</option>
+              <option value="pt">Português (pt)</option>
+              <option value="ja">日本語 (ja)</option>
+              <option value="zh">中文 (zh)</option>
+              <option value="ko">한국어 (ko)</option>
+              <option value="ru">Русский (ru)</option>
+              <option value="ar">العربية (ar)</option>
+              <option value="hi">हिन्दी (hi)</option>
+              <option value="nl">Nederlands (nl)</option>
+              <option value="pl">Polski (pl)</option>
+              <option value="tr">Türkçe (tr)</option>
+            </select>
+          </div>
+          <div class="cp-field">
+            <label>Idioma de audio</label>
+            <select id="cp-audio-lang">
+              <option value="es-AR">Español Argentina (es-AR)</option>
+              <option value="es-ES">Español España (es-ES)</option>
+              <option value="es-MX">Español México (es-MX)</option>
+              <option value="en-US">English US (en-US)</option>
+              <option value="en-GB">English UK (en-GB)</option>
+              <option value="fr-FR">Français (fr-FR)</option>
+              <option value="de-DE">Deutsch (de-DE)</option>
+              <option value="it-IT">Italiano (it-IT)</option>
+              <option value="pt-BR">Português Brasil (pt-BR)</option>
+              <option value="ja-JP">日本語 (ja-JP)</option>
+              <option value="zh-CN">中文 (zh-CN)</option>
+              <option value="ko-KR">한국어 (ko-KR)</option>
+            </select>
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Burbuja de texto</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-bubble-enabled">
+            <span>Mostrar burbuja de texto</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Muestra las respuestas del server sobre el personaje
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Salida (TTS)</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-tts-enabled">
+            <span>Leer respuestas en voz alta</span>
+          </div>
+          <div class="cp-field">
+            <label>Modo TTS</label>
+            <select id="cp-tts-provider">
+              <option value="browser">Voces del sistema (local)</option>
+              <option value="server">Desde el servidor (Edge TTS / Piper)</option>
+            </select>
+          </div>
+          <div class="cp-field">
+            <label>Voz (solo modo local)</label>
+            <select id="cp-tts-voice">
+              <!-- Se llena dinámicamente -->
+            </select>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 0;">
+            Las voces marcadas con ★ son "Online" (más naturales en Windows 11)
+          </div>
+          <div class="cp-field">
+            <label>Velocidad <span id="cp-tts-rate-val" style="color:#5b8;float:right;">1</span></label>
+            <input type="range" id="cp-tts-rate" min="0.5" max="2" step="0.1" value="1" class="cp-range">
+          </div>
+          <div class="cp-field">
+            <label>Tono <span id="cp-tts-pitch-val" style="color:#5b8;float:right;">1</span></label>
+            <input type="range" id="cp-tts-pitch" min="0.5" max="2" step="0.1" value="1" class="cp-range">
+          </div>
+          <div class="cp-field">
+            <label>Volumen <span id="cp-tts-volume-val" style="color:#5b8;float:right;">1</span></label>
+            <input type="range" id="cp-tts-volume" min="0" max="1" step="0.1" value="1" class="cp-range">
+          </div>
+          <div style="margin:8px 0 16px;">
+            <button class="cp-btn" id="cp-tts-preview">Probar voz</button>
+          </div>
+          <button class="cp-btn cp-save">Guardar</button>
+        </div>
+
+        <!-- Página: Física -->
+        <div class="cp-page" id="page-fisica">
+          <div class="cp-page-title">Física</div>
+          <div class="cp-field">
+            <label>Gravedad (px/s²)</label>
+            <input type="text" id="cp-physics-gravity" inputmode="numeric" placeholder="1200">
+          </div>
+          <div class="cp-field">
+            <label>Velocidad de caminata (px/s)</label>
+            <input type="text" id="cp-physics-walk-speed" inputmode="numeric" placeholder="70">
+          </div>
+          <div class="cp-field">
+            <label>Factor de rebote (0-1)</label>
+            <input type="text" id="cp-physics-bounce-factor" inputmode="numeric" placeholder="0.25">
+          </div>
+          <div class="cp-field">
+            <label>Umbral de rebote (px/s mínimo para rebotar)</label>
+            <input type="text" id="cp-physics-bounce-threshold" inputmode="numeric" placeholder="150">
+          </div>
+          <div class="cp-field">
+            <label>Velocidad terminal (px/s máx de caída)</label>
+            <input type="text" id="cp-physics-terminal-velocity" inputmode="numeric" placeholder="900">
+          </div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="fisica">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Comportamiento -->
+        <div class="cp-page" id="page-comportamiento">
+          <div class="cp-page-title">Comportamiento</div>
+
+          <div class="cp-field">
+            <label>Sensibilidad al cursor (px)</label>
+            <input type="text" id="cp-behavior-cursor-threshold" inputmode="numeric" placeholder="20">
+          </div>
+
+          <div style="margin:12px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Duraciones por estado (ms)</div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Idle mín</label>
+              <input type="text" id="cp-behavior-idle-min" inputmode="numeric" placeholder="2000">
+            </div>
+            <div class="cp-field">
+              <label>Idle máx</label>
+              <input type="text" id="cp-behavior-idle-max" inputmode="numeric" placeholder="5000">
+            </div>
+          </div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Blink mín</label>
+              <input type="text" id="cp-behavior-blink-min" inputmode="numeric" placeholder="400">
+            </div>
+            <div class="cp-field">
+              <label>Blink máx</label>
+              <input type="text" id="cp-behavior-blink-max" inputmode="numeric" placeholder="600">
+            </div>
+          </div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Look mín</label>
+              <input type="text" id="cp-behavior-look-min" inputmode="numeric" placeholder="1000">
+            </div>
+            <div class="cp-field">
+              <label>Look máx</label>
+              <input type="text" id="cp-behavior-look-max" inputmode="numeric" placeholder="2500">
+            </div>
+          </div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Walk mín</label>
+              <input type="text" id="cp-behavior-walk-min" inputmode="numeric" placeholder="2000">
+            </div>
+            <div class="cp-field">
+              <label>Walk máx</label>
+              <input type="text" id="cp-behavior-walk-max" inputmode="numeric" placeholder="5000">
+            </div>
+          </div>
+
+          <div style="margin:12px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Pesos de transición</div>
+          <div style="font-size:10px;color:#666;margin-bottom:8px;">Mayor peso = más frecuente. 0 = nunca.</div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Blink</label>
+              <input type="text" id="cp-behavior-weight-blink" inputmode="numeric" placeholder="4">
+            </div>
+            <div class="cp-field">
+              <label>Look</label>
+              <input type="text" id="cp-behavior-weight-look" inputmode="numeric" placeholder="2">
+            </div>
+            <div class="cp-field">
+              <label>Walk</label>
+              <input type="text" id="cp-behavior-weight-walk" inputmode="numeric" placeholder="1">
+            </div>
+          </div>
+
+          <div style="margin:12px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Frame rates (ms por frame)</div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Idle</label>
+              <input type="text" id="cp-behavior-fps-idle" inputmode="numeric" placeholder="300">
+            </div>
+            <div class="cp-field">
+              <label>Blink</label>
+              <input type="text" id="cp-behavior-fps-blink" inputmode="numeric" placeholder="150">
+            </div>
+          </div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Look</label>
+              <input type="text" id="cp-behavior-fps-look" inputmode="numeric" placeholder="250">
+            </div>
+            <div class="cp-field">
+              <label>Drag</label>
+              <input type="text" id="cp-behavior-fps-drag" inputmode="numeric" placeholder="200">
+            </div>
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Emociones</div>
+          <div style="font-size:10px;color:#666;margin-bottom:8px;">
+            El critter cambia de expresi&oacute;n seg&uacute;n lo que pasa: piensa mientras espera respuesta,
+            se pone contento al recibir una, se pone triste si pierde conexi&oacute;n.
+          </div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-emotions-enabled">
+            <span>Habilitar emociones</span>
+          </div>
+          <div class="cp-field">
+            <label>Duraci&oacute;n de emoci&oacute;n feliz (ms)</label>
+            <input type="text" id="cp-emotion-happy-ms" inputmode="numeric" placeholder="2000">
+          </div>
+
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="comportamiento">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Apariencia -->
+        <div class="cp-page" id="page-apariencia">
+          <div class="cp-page-title">Apariencia</div>
+          <div class="cp-field">
+            <label>Escala del sprite (multiplicador)</label>
+            <input type="text" id="cp-sprite-scale" inputmode="numeric" placeholder="3">
+          </div>
+          <div class="cp-field">
+            <label>Tiempo burbuja visible (ms)</label>
+            <input type="text" id="cp-bubble-dismiss-ms" inputmode="numeric" placeholder="12000">
+          </div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Ancho del chat (px)</label>
+              <input type="text" id="cp-chat-width" inputmode="numeric" placeholder="320">
+            </div>
+            <div class="cp-field">
+              <label>Alto del chat (px)</label>
+              <input type="text" id="cp-chat-height" inputmode="numeric" placeholder="450">
+            </div>
+          </div>
+          <div class="cp-field">
+            <label>Delay hover botones (ms)</label>
+            <input type="text" id="cp-hover-delay-ms" inputmode="numeric" placeholder="300">
+          </div>
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Historial de chat</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-chat-history-enabled">
+            <span>Guardar historial de conversaciones</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Las conversaciones se guardan localmente en SQLite. Pod&eacute;s buscar y revisar
+            conversaciones anteriores desde el panel de chat.
+          </div>
+          <div class="cp-field">
+            <label>M&aacute;ximo de mensajes guardados (0 = sin l&iacute;mite)</label>
+            <input type="text" id="cp-chat-history-max" inputmode="numeric" placeholder="0">
+          </div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="apariencia">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Atajos -->
+        <div class="cp-page" id="page-atajos">
+          <div class="cp-page-title">Atajos globales</div>
+          <div style="font-size:11px;color:#888;margin-bottom:16px;">
+            Todos los atajos usan <b>Ctrl+Shift+Letra</b>. Ingres&aacute; una sola letra (A-Z).
+            Los cambios se aplican al guardar.
+          </div>
+
+          <div class="cp-field">
+            <label>Chat toggle / Push-to-talk</label>
+            <div class="cp-row" style="align-items:center;gap:8px;">
+              <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+              <input type="text" id="cp-hotkey-chat" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+              <span style="color:#666;font-size:10px;">Tap = chat, mantener = push-to-talk</span>
+            </div>
+          </div>
+
+          <div class="cp-field">
+            <label>Ocultar / Mostrar critter</label>
+            <div class="cp-row" style="align-items:center;gap:8px;">
+              <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+              <input type="text" id="cp-hotkey-visibility" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+            </div>
+          </div>
+
+          <div class="cp-field">
+            <label>Abrir configuraci&oacute;n</label>
+            <div class="cp-row" style="align-items:center;gap:8px;">
+              <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+              <input type="text" id="cp-hotkey-config" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+            </div>
+          </div>
+
+          <div class="cp-field">
+            <label>Toggle modo debug</label>
+            <div class="cp-row" style="align-items:center;gap:8px;">
+              <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+              <input type="text" id="cp-hotkey-debug" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+            </div>
+          </div>
+
+          <div class="cp-field">
+            <label>Reconectar al server</label>
+            <div class="cp-row" style="align-items:center;gap:8px;">
+              <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+              <input type="text" id="cp-hotkey-reconnect" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+            </div>
+          </div>
+
+          <div class="cp-sprite-error" id="cp-hotkey-error"></div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="atajos">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Avanzado -->
+        <div class="cp-page" id="page-avanzado">
+          <div class="cp-page-title">Avanzado</div>
+
+          <div style="margin:0 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Whisper</div>
+          <div class="cp-field">
+            <label>Idle timeout — descargar modelo de RAM (ms)</label>
+            <input type="text" id="cp-whisper-idle-ms" inputmode="numeric" placeholder="60000">
+          </div>
+          <div class="cp-field">
+            <label>Límite RAM para Whisper (MB)</label>
+            <input type="text" id="cp-whisper-max-ram-mb" inputmode="numeric" placeholder="2048">
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Reconexión</div>
+          <div class="cp-row">
+            <div class="cp-field">
+              <label>Delay base (ms)</label>
+              <input type="text" id="cp-reconnect-base-ms" inputmode="numeric" placeholder="1000">
+            </div>
+            <div class="cp-field">
+              <label>Delay máximo (ms)</label>
+              <input type="text" id="cp-reconnect-max-ms" inputmode="numeric" placeholder="30000">
+            </div>
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Interacción</div>
+          <div class="cp-field">
+            <label>Umbral push-to-talk (ms)</label>
+            <input type="text" id="cp-hold-to-talk-ms" inputmode="numeric" placeholder="400">
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 0;">
+            Mantener la tecla más de este tiempo activa push-to-talk; menos = toggle chat
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Men&uacute; contextual</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-context-menu-enabled">
+            <span>Habilitar men&uacute; de click derecho</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Click derecho sobre el critter muestra un men&uacute; r&aacute;pido con acciones comunes
+            (chat, configuraci&oacute;n, reconectar, ocultar).
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Notificaciones</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-notifications-enabled">
+            <span>Notificaciones del sistema</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Muestra una notificaci&oacute;n del sistema operativo cuando el critter recibe una
+            respuesta y la ventana no tiene foco. &Uacute;til cuando est&aacute;s en otra aplicaci&oacute;n.
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Actualizaciones</div>
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-auto-update-enabled">
+            <span>Buscar actualizaciones al iniciar</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Consulta GitHub al abrir la app si hay una versi&oacute;n nueva disponible.
+            Si la hay, el critter muestra una burbuja con la opci&oacute;n de actualizar.
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Hotkeys globales</div>
+          <div style="font-size:11px;color:#888;margin-bottom:12px;">
+            Los atajos se configuran en la secci&oacute;n <b>Atajos</b> del men&uacute; lateral.
+          </div>
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="avanzado">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Sonidos -->
+        <div class="cp-page" id="page-sonidos">
+          <div class="cp-page-title">Efectos de sonido</div>
+          <div style="font-size:11px;color:#888;margin-bottom:16px;">
+            Sonidos cortos que acompa&ntilde;an las acciones del critter. Se reproducen localmente,
+            no afectan al servidor ni al TTS.
+          </div>
+
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-sfx-enabled">
+            <span>Habilitar efectos de sonido</span>
+          </div>
+
+          <div class="cp-field">
+            <label>Volumen <span id="cp-sfx-volume-val" style="color:#5b8;float:right;">0.5</span></label>
+            <input type="range" id="cp-sfx-volume" min="0" max="1" step="0.1" value="0.5" class="cp-range">
+          </div>
+
+          <div style="margin:12px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Eventos con sonido</div>
+          <div style="font-size:10px;color:#666;margin-bottom:8px;">
+            Activ&aacute; o desactiv&aacute; sonidos individuales.
+          </div>
+          <div class="cp-toggle"><input type="checkbox" id="cp-sfx-chat"><span>Abrir/cerrar chat</span></div>
+          <div class="cp-toggle"><input type="checkbox" id="cp-sfx-message"><span>Mensaje recibido</span></div>
+          <div class="cp-toggle"><input type="checkbox" id="cp-sfx-mic"><span>Inicio de grabaci&oacute;n</span></div>
+          <div class="cp-toggle"><input type="checkbox" id="cp-sfx-connect"><span>Conexi&oacute;n establecida</span></div>
+          <div class="cp-toggle"><input type="checkbox" id="cp-sfx-error"><span>Error</span></div>
+
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="sonidos">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: API -->
+        <div class="cp-page" id="page-api">
+          <div class="cp-page-title">API HTTP local</div>
+          <div style="font-size:11px;color:#888;margin-bottom:16px;">
+            Permite que otros programas de tu PC se comuniquen con el critter
+            mediante peticiones HTTP. Por ejemplo, un script puede enviar un mensaje
+            al critter o consultar su estado.
+          </div>
+
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-local-api-enabled">
+            <span>Habilitar API local</span>
+          </div>
+          <div style="font-size:10px;color:#666;margin:-8px 0 12px 26px;">
+            Requiere reiniciar la app para aplicar cambios
+          </div>
+
+          <div class="cp-field">
+            <label>Puerto</label>
+            <input type="text" id="cp-local-api-port" inputmode="numeric" placeholder="17842">
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Endpoints disponibles</div>
+          <div class="cp-sprite-info">
+            <ul>
+              <li><b>POST /message</b> &mdash; env&iacute;a texto al critter: { "text": "hola" }</li>
+              <li><b>GET /status</b> &mdash; estado de conexi&oacute;n, versi&oacute;n</li>
+              <li><b>POST /action</b> &mdash; ejecuta una acci&oacute;n: { "action": "wave" }</li>
+              <li><b>POST /webhook</b> &mdash; trigger externo: { "event": "notify", "data": {"text": "..."} }</li>
+            </ul>
+          </div>
+
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+        <!-- Página: Plugins -->
+        <div class="cp-page" id="page-plugins">
+          <div class="cp-page-title">Plugins</div>
+          <div style="font-size:11px;color:#888;margin-bottom:16px;">
+            Los plugins agregan comportamientos, animaciones y herramientas al critter
+            sin modificar el c&oacute;digo principal. Se cargan autom&aacute;ticamente desde la
+            carpeta de plugins al iniciar.
+          </div>
+
+          <div class="cp-toggle">
+            <input type="checkbox" id="cp-plugins-enabled">
+            <span>Habilitar sistema de plugins</span>
+          </div>
+
+          <div class="cp-field">
+            <label>Carpeta de plugins</label>
+            <input type="text" id="cp-plugins-dir" spellcheck="false" placeholder="plugins/">
+          </div>
+
+          <div style="margin:16px 0 4px; font-size:11px; color:#888; text-transform:uppercase; letter-spacing:0.3px;">Plugins instalados</div>
+          <ul class="cp-char-list" id="cp-plugin-list">
+            <li style="color:#666;font-size:11px;padding:8px;">Sin plugins instalados</li>
+          </ul>
+
+          <div class="cp-sprite-info">
+            <p><b>Crear un plugin:</b></p>
+            <ul>
+              <li>Crear una carpeta dentro de <b>plugins/</b></li>
+              <li>Agregar <b>plugin.json</b> con name, version, description</li>
+              <li>Opcional: animations (sprite rows), states (FSM), init (script JS)</li>
+              <li>El plugin recibe acceso limitado al eventBus (emit/on) y config (get)</li>
+            </ul>
+          </div>
+
+          <br>
+          <div style="display:flex;gap:8px;">
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <script type="module" src="js/db.js"></script>
+  <script type="module" src="js/config-panel-app.js"></script>
+</body>
+</html>
