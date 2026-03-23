@@ -4,16 +4,7 @@ import { eventBus } from './event-bus.js';
 import { dbg } from './debug.js';
 import * as config from './config.js';
 import { addMessage, deleteOldMessages } from './db.js';
-
-function stripAnsi(str) {
-  return str
-    .replace(/\x1B\[[0-9;?]*[A-Za-z@]/g, '')
-    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, '')
-    .replace(/\x1B[A-Z\\]/g, '')
-    .replace(/[\x00-\x08\x0E-\x1F\x7F]/g, '')
-    .replace(/\r/g, '')
-    .trim();
-}
+import { stripAnsi, renderMarkdown } from './text-utils.js';
 
 const COMMANDS = [
   { cmd: '/nueva',     desc: 'Nueva conversación' },
@@ -30,59 +21,11 @@ const COMMANDS = [
   { cmd: '/ayuda',     desc: 'Todos los comandos' },
 ];
 
+const STREAM_RENDER_DEBOUNCE_MS = 150;
 const CHAT_WIDTH = 320;
 const CRITTER_WIDTH = 96;
 const CRITTER_HEIGHT = 96;
 const CHAT_HEIGHT = 450;
-
-// --- Markdown ligero (sin dependencias) ---
-
-export function renderMarkdown(text) {
-  // Escapar HTML
-  let html = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // Bloques de código ```
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g,
-    (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`);
-
-  // Código inline `texto`
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Bold **texto** o __texto__
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-
-  // Italic *texto* o _texto_ (sin matchear los ** ya procesados)
-  html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
-  html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
-
-  // Strikethrough ~~texto~~
-  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
-
-  // Links [texto](url)
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-  // Headers (# ## ###) — solo al inicio de línea
-  html = html.replace(/^### (.+)$/gm, '<strong style="font-size:13px">$1</strong>');
-  html = html.replace(/^## (.+)$/gm, '<strong style="font-size:14px">$1</strong>');
-  html = html.replace(/^# (.+)$/gm, '<strong style="font-size:15px">$1</strong>');
-
-  // Listas con — o - al inicio
-  html = html.replace(/^[—–-] (.+)$/gm, '• $1');
-
-  // Saltos de línea
-  html = html.replace(/\n/g, '<br>');
-
-  // Limpiar <br> antes/después de <pre>
-  html = html.replace(/<br><pre>/g, '<pre>');
-  html = html.replace(/<\/pre><br>/g, '</pre>');
-
-  return html;
-}
 
 function timeStr() {
   const d = new Date();
@@ -102,6 +45,8 @@ export class ChatPanel {
     this._open = false;
     this._streamingEl = null;
     this._streamingTextEl = null;
+    this._streamRenderTimer = null;
+    this._pendingStreamText = null;
     this._typingEl = null;
 
     // DOM
@@ -252,12 +197,26 @@ export class ChatPanel {
     if (!this._streamingEl) {
       this._startStreaming();
     }
-    // Renderizar markdown en vivo durante streaming
-    this._streamingTextEl.innerHTML = renderMarkdown(stripAnsi(text));
-    this._scrollToBottom();
+    // Debounce: guardar texto pendiente, renderizar cada 150ms
+    this._pendingStreamText = text;
+    if (!this._streamRenderTimer) {
+      this._streamRenderTimer = setTimeout(() => this._flushStreamRender(), STREAM_RENDER_DEBOUNCE_MS);
+    }
+  }
+
+  _flushStreamRender() {
+    clearTimeout(this._streamRenderTimer);
+    this._streamRenderTimer = null;
+    if (this._pendingStreamText && this._streamingTextEl) {
+      this._streamingTextEl.innerHTML = renderMarkdown(stripAnsi(this._pendingStreamText));
+      this._pendingStreamText = null;
+      this._scrollToBottom();
+    }
   }
 
   _finishStreaming() {
+    // Flush inmediato del texto final
+    this._flushStreamRender();
     if (this._streamingEl) {
       this._streamingEl.classList.remove('streaming');
       this._streamingEl.appendChild(this._createTime());
@@ -451,6 +410,13 @@ export class ChatPanel {
     eventBus.on('server:done', ({ text }) => {
       this._finishStreaming();
       // Persistir respuesta del bot en historial
+      this._saveMessage('bot', text);
+    });
+
+    // Mensaje proactivo (push)
+    eventBus.on('server:push', ({ text }) => {
+      if (!text?.trim()) return;
+      this._addBot(text);
       this._saveMessage('bot', text);
     });
 

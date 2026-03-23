@@ -74,6 +74,16 @@ function errorSound() {
 export function initSfx() {
   dbg('sfx', 'inicializando efectos de sonido');
 
+  // Suspender AudioContext cuando la app no está visible (ahorra CPU idle)
+  document.addEventListener('visibilitychange', () => {
+    if (!_ctx) return;
+    if (document.hidden) {
+      _ctx.suspend().catch(() => {});
+    } else {
+      _ctx.resume().catch(() => {});
+    }
+  });
+
   // Chat abierto/cerrado
   eventBus.on('bubble:show', () => {
     if (isEnabled('sfxChat')) pop();
@@ -92,6 +102,11 @@ export function initSfx() {
   // Conexión establecida
   eventBus.on('server:connected', () => {
     if (isEnabled('sfxConnect')) chime();
+  });
+
+  // Mensaje proactivo (push)
+  eventBus.on('server:push', () => {
+    if (isEnabled('sfxMessage')) ding();
   });
 
   // Error de audio/transcripción

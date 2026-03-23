@@ -47,6 +47,36 @@ let lastTime = 0;
 let lastPosX = -1;
 let lastPosY = -1;
 
+// --- Pausa cuando la ventana no es visible (ahorro CPU) ---
+let _paused = false;
+let _activeLoop = null; // 'game' o 'placeholder' — indica cuál loop reiniciar
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    _paused = true;
+    // Cancelar TTS activo para no procesar audio en background
+    window.speechSynthesis?.cancel();
+  } else {
+    _paused = false;
+    lastTime = 0; // evitar deltaTime gigante al volver
+    if (_activeLoop === 'placeholder') {
+      requestAnimationFrame(_placeholderDraw);
+    } else {
+      requestAnimationFrame(gameLoop);
+    }
+  }
+});
+
+// --- Cache de monitores (evita IPC repetido en drag-end) ---
+let _monitorsCache = null;
+let _monitorsCacheTime = 0;
+async function getCachedMonitors() {
+  const now = Date.now();
+  if (_monitorsCache && now - _monitorsCacheTime < 30000) return _monitorsCache;
+  _monitorsCache = await windowManager.getAvailableMonitors();
+  _monitorsCacheTime = now;
+  return _monitorsCache;
+}
+
 // --- Anclaje de posición (se actualizan con drag) ---
 const BASE_W = 96;
 const BASE_H = 96;
@@ -78,7 +108,7 @@ eventBus.on('input:dragEnd', async () => {
   physics.release();
 
   // Detectar monitor destino y actualizar bounds
-  const monitors = await windowManager.getAvailableMonitors();
+  const monitors = await getCachedMonitors();
   if (monitors.length > 1) {
     const critterCenter = pos.x + BASE_W / 2;
     const targetMonitor = monitors.find(m =>
@@ -199,6 +229,7 @@ eventBus.on('audio:remote', ({ base64, format }) => {
 
 // TTS — leer respuesta en voz alta (browser speech)
 eventBus.on('server:done', ({ text }) => {
+  if (document.hidden) return; // no procesar TTS si la ventana está oculta
   if (config.get('ttsEnabled') && config.get('ttsProvider') === 'browser' && text?.trim()) {
     try {
       const utter = new SpeechSynthesisUtterance(cleanForTts(text));
@@ -212,7 +243,7 @@ eventBus.on('server:done', ({ text }) => {
       utter.pitch = config.get('ttsPitch') ?? 1;
       utter.volume = config.get('ttsVolume') ?? 1;
       window.speechSynthesis?.speak(utter);
-    } catch {}
+    } catch (e) { dbg('main', 'TTS error', e); }
   }
 });
 
@@ -229,7 +260,54 @@ eventBus.on('server:done', ({ text }) => {
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission();
     }
-  } catch {}
+  } catch (e) { dbg('main', 'notification error', e); }
+});
+
+// =============================================
+// Mensajes proactivos (push) del server
+// =============================================
+
+eventBus.on('server:push', ({ text }) => {
+  if (!text?.trim()) return;
+
+  // Burbuja — siempre, sin importar si el chat está abierto
+  bubble.show(text);
+  bubble.done();
+
+  // TTS — leer el texto (sin importar si la ventana está oculta)
+  if (config.get('ttsEnabled') && config.get('ttsProvider') === 'browser') {
+    try {
+      const utter = new SpeechSynthesisUtterance(cleanForTts(text));
+      const voiceName = config.get('ttsVoice');
+      if (voiceName && window.speechSynthesis) {
+        const voice = window.speechSynthesis.getVoices().find(v => v.name === voiceName);
+        if (voice) utter.voice = voice;
+      }
+      utter.lang = config.get('audioLang') || 'es-AR';
+      utter.rate = config.get('ttsRate') ?? 1;
+      utter.pitch = config.get('ttsPitch') ?? 1;
+      utter.volume = config.get('ttsVolume') ?? 1;
+      window.speechSynthesis?.speak(utter);
+    } catch (e) { dbg('main', 'push TTS error', e); }
+  }
+
+  // Notificación del SO — siempre (no solo cuando no tiene foco)
+  try {
+    if (Notification.permission === 'granted') {
+      new Notification('DeskCritter', {
+        body: text.substring(0, 100),
+        silent: true,
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+  } catch (e) { dbg('main', 'push notification error', e); }
+
+  // Emoción
+  if (config.get('emotionsEnabled')) {
+    fsm.forceState('celebrating');
+    sprite.play('celebrate');
+  }
 });
 
 // TTS — reproducir audio del server (Edge TTS / Piper)
@@ -237,7 +315,7 @@ eventBus.on('server:voice', ({ base64 }) => {
   try {
     const audio = new Audio('data:audio/wav;base64,' + base64);
     audio.play();
-  } catch {}
+  } catch (e) { dbg('main', 'voice playback error', e); }
 });
 
 // =============================================
@@ -310,8 +388,8 @@ eventBus.on('server:disconnected', () => {
 // =============================================
 
 eventBus.on('audio:result', ({ text }) => {
-  if (server.connected && !server.busy) {
-    server.send(text);
+  if (server?.connected && !server?.busy) {
+    server?.send(text);
   }
 });
 
@@ -399,8 +477,8 @@ const configPanel = new ConfigPanel();
 
 // Reconectar server desde el panel
 eventBus.on('config:reconnect', () => {
-  server.disconnect();
-  server.connect();
+  server?.disconnect();
+  server?.connect();
 });
 
 // Config actualizada desde el panel → re-aplicar comportamiento y escala
@@ -418,6 +496,7 @@ eventBus.on('config:updated', (partial) => {
 // =============================================
 
 function gameLoop(timestamp) {
+  if (_paused) return; // no consumir CPU si la ventana está oculta
   const deltaTime = lastTime ? timestamp - lastTime : 16;
   lastTime = timestamp;
 
@@ -457,9 +536,12 @@ function gameLoop(timestamp) {
 // Placeholder (sin sprite sheet)
 // =============================================
 
+let _placeholderDraw = null;
 function drawPlaceholder() {
   const size = 96;
-  function draw(timestamp) {
+  _activeLoop = 'placeholder';
+  _placeholderDraw = function draw(timestamp) {
+    if (_paused) return; // no consumir CPU si la ventana está oculta
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#5b8c5a';
@@ -493,8 +575,8 @@ function drawPlaceholder() {
     ctx.stroke();
 
     requestAnimationFrame(draw);
-  }
-  requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(_placeholderDraw);
 }
 
 // =============================================
@@ -549,11 +631,12 @@ async function init() {
       dbg('main', 'sprite cambiado desde config panel');
       try {
         await sprite.reloadSheet(src);
-      } catch {
+      } catch (e) {
+        dbg('main', 'error recargando sprite, usando default', e);
         await sprite.reloadSheet('assets/critter.png');
       }
     });
-  } catch {}
+  } catch (e) { dbg('main', 'sprite listener error', e); }
 
   await windowManager.init();
 
@@ -622,6 +705,7 @@ async function init() {
   // Cargar plugins
   await loadPlugins(sprite, fsm);
 
+  _activeLoop = 'game';
   requestAnimationFrame(gameLoop);
 
   // Iniciar audio (solicita permiso de micrófono)
@@ -719,8 +803,8 @@ async function init() {
           break;
         }
         case 'reconnect':
-          server.disconnect();
-          server.connect();
+          server?.disconnect();
+          server?.connect();
           bubble.show('Reconectando...');
           bubble.done();
           break;
@@ -735,10 +819,21 @@ async function init() {
   try {
     const { listen: listenTray } = window.__TAURI__.event;
     await listenTray('tray:reconnect', () => {
-      server.disconnect();
-      server.connect();
+      server?.disconnect();
+      server?.connect();
     });
-  } catch {}
+  } catch (e) { dbg('main', 'tray listener error', e); }
+
+  // Iniciar HTTP API local si está habilitado en config
+  if (config.get('localApiEnabled')) {
+    try {
+      const port = config.get('localApiPort') || 17842;
+      const token = await window.__TAURI__.core.invoke('start_local_api', { port });
+      dbg('main', 'HTTP API iniciada en puerto', port, 'token:', token.substring(0, 8) + '...');
+    } catch (e) {
+      dbg('main', 'error iniciando HTTP API', e);
+    }
+  }
 
   // HTTP API local — escuchar eventos del servidor HTTP
   try {
@@ -799,7 +894,7 @@ async function init() {
     });
 
     dbg('main', 'HTTP API listeners registrados');
-  } catch {}
+  } catch (e) { dbg('main', 'HTTP API listener error', e); }
 
   // Inicializar action handler (ejecuta tools remotos del server)
   initActionHandler((msg) => server.sendRaw(msg));
