@@ -3,6 +3,7 @@
 import { eventBus } from './event-bus.js';
 import * as config from './config.js';
 import { dbg } from './debug.js';
+import { BaseTransport } from './base-transport.js';
 
 const RECONNECT_BASE_DEFAULT = 2000;
 const RECONNECT_MAX_DEFAULT = 30000;
@@ -12,8 +13,9 @@ const STUN_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-export class NodrizaClient {
+export class NodrizaClient extends BaseTransport {
   constructor() {
+    super('nodriza');
     // Signaling WebSocket
     this._ws = null;
     this._authenticated = false;
@@ -22,11 +24,6 @@ export class NodrizaClient {
     this._pc = null;
     this._dc = null;       // RTCDataChannel activo
     this._peerId = null;   // ID del server emparejado
-
-    // Estado de sesión AI (misma interfaz que ServerConnection)
-    this._sessionId = null;
-    this._accumulatedText = '';
-    this._busy = false;
 
     // Relay fallback (cuando P2P falla)
     this._relayMode = false;    // true si está en modo relay (P2P falló)
@@ -44,12 +41,20 @@ export class NodrizaClient {
     return this._dc?.readyState === 'open' || this._relayMode;
   }
 
-  get busy() {
-    return this._busy;
+  _rawSend(obj) {
+    const data = JSON.stringify(obj);
+    if (this._relayMode) {
+      this._sendRelay(data);
+    } else if (this._dc?.readyState === 'open') {
+      this._dc.send(data);
+    }
   }
 
-  get sessionId() {
-    return this._sessionId;
+  // Enviar audio para transcripción remota
+  sendAudio(base64, format) {
+    dbg('nodriza', 'sendAudio()', { size: base64?.length, format, connected: this.connected });
+    if (!this.connected) return;
+    this._rawSend({ type: 'audio', data: base64, format: format || 'webm' });
   }
 
   // ── Conectar a nodriza signaling ────────────────────────────────────────────
@@ -88,6 +93,7 @@ export class NodrizaClient {
       // Si estaba en relay mode, también perdimos la conexión
       if (this._relayMode) {
         this._relayMode = false;
+        this._resetInit();
         eventBus.emit('server:disconnected');
         if (!this._intentionalClose) this._scheduleReconnect();
         return;
@@ -100,6 +106,7 @@ export class NodrizaClient {
       }
       // Sin P2P → notificar desconexión y reconectar
       this._closePeer();
+      this._resetInit();
       eventBus.emit('server:disconnected');
       if (!this._intentionalClose) this._scheduleReconnect();
     };
@@ -109,6 +116,7 @@ export class NodrizaClient {
 
   disconnect() {
     this._intentionalClose = true;
+    this._resetInit();
     clearTimeout(this._reconnectTimer);
     clearTimeout(this._p2pTimer);
     this._closePeer();
@@ -119,57 +127,6 @@ export class NodrizaClient {
     }
     this._authenticated = false;
     this._sessionId = null;
-  }
-
-  // Enviar mensaje al server (por DataChannel P2P o relay)
-  send(text) {
-    dbg('nodriza', 'send()', { text, connected: this.connected, relay: this._relayMode });
-    if (!this.connected || !text.trim()) return;
-    this._busy = true;
-    this._accumulatedText = '';
-    eventBus.emit('server:busy', true);
-
-    const msg = JSON.stringify({ type: 'input', data: text });
-    if (this._relayMode) {
-      this._sendRelay(msg);
-    } else {
-      this._dc.send(msg);
-    }
-  }
-
-  // Enviar mensaje raw (para action_result/action_error)
-  sendRaw(msg) {
-    if (!this.connected) return;
-    const data = JSON.stringify(msg);
-    if (this._relayMode) {
-      this._sendRelay(data);
-    } else {
-      this._dc.send(data);
-    }
-  }
-
-  // Enviar audio para transcripción remota
-  sendAudio(base64, format) {
-    dbg('nodriza', 'sendAudio()', { size: base64?.length, format, connected: this.connected });
-    if (!this.connected) return;
-    const msg = JSON.stringify({ type: 'audio', data: base64, format: format || 'webm' });
-    if (this._relayMode) {
-      this._sendRelay(msg);
-    } else {
-      this._dc.send(msg);
-    }
-  }
-
-  // Enviar callback de botón al server
-  sendCallback(callbackData) {
-    dbg('nodriza', 'sendCallback()', callbackData);
-    if (!this.connected) return;
-    const msg = JSON.stringify({ type: 'callback', data: callbackData });
-    if (this._relayMode) {
-      this._sendRelay(msg);
-    } else {
-      this._dc.send(msg);
-    }
   }
 
   // ── Signaling ─────────────────────────────────────────────────────────────
@@ -208,6 +165,7 @@ export class NodrizaClient {
       case 'peer:disconnected':
         dbg('nodriza', 'peer desconectado:', msg.data.peerId);
         this._relayMode = false;
+        this._resetInit();
         this._closePeer();
         eventBus.emit('server:disconnected');
         break;
@@ -231,6 +189,7 @@ export class NodrizaClient {
         this._peerId = msg.data.peerId;
         this._relayMode = true;
         eventBus.emit('server:connected');
+        this._resetInit();
         this._sendInit();
         break;
 
@@ -278,6 +237,7 @@ export class NodrizaClient {
       dbg('nodriza', 'connection state:', pc.connectionState);
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         this._closePeer();
+        this._resetInit();
         eventBus.emit('server:disconnected');
       }
     };
@@ -299,13 +259,13 @@ export class NodrizaClient {
       data: { targetId: fromId, sdp: answer.sdp },
     });
 
-    // Timeout: si DataChannel no abre en 15s, pedir relay
+    // Timeout: si DataChannel no abre en 8s, pedir relay
     this._p2pTimer = setTimeout(() => {
       if (!this._dc || this._dc.readyState !== 'open') {
         dbg('nodriza', 'P2P timeout — solicitando relay');
         this._requestRelay();
       }
-    }, 15000);
+    }, 8000);
   }
 
   async _handleAnswer(fromId, sdp) {
@@ -334,6 +294,7 @@ export class NodrizaClient {
 
       dbg('nodriza', 'DataChannel abierto — enviando init');
       eventBus.emit('server:connected');
+      this._resetInit();
       this._sendInit();
 
       // Signaling WS se mantiene abierto (idle) para que nodriza no envíe peer:disconnected
@@ -347,6 +308,7 @@ export class NodrizaClient {
     dc.onclose = () => {
       dbg('nodriza', 'DataChannel cerrado');
       this._dc = null;
+      this._resetInit();
       eventBus.emit('server:disconnected');
 
       // P2P perdido → reconectar a nodriza para re-señalización
@@ -359,80 +321,6 @@ export class NodrizaClient {
     dc.onerror = (e) => {
       dbg('nodriza', 'DataChannel error:', e);
     };
-  }
-
-  // ── Protocolo AI (mismo que ServerConnection) ─────────────────────────────
-
-  _sendInit() {
-    if (!this.connected) return;
-
-    const msg = { type: 'init', sessionType: 'ai' };
-
-    const provider = config.get('provider');
-    const agentKey = config.get('agentKey');
-    const model = config.get('model');
-
-    if (provider) msg.provider = provider;
-    if (agentKey) msg.agentKey = agentKey;
-    if (model) msg.model = model;
-
-    const data = JSON.stringify(msg);
-    if (this._relayMode) {
-      this._sendRelay(data);
-    } else if (this._dc && this._dc.readyState === 'open') {
-      this._dc.send(data);
-    }
-  }
-
-  _handleMessage(raw) {
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
-
-    switch (msg.type) {
-      case 'session_id':
-        this._sessionId = msg.id;
-        eventBus.emit('server:session', { id: msg.id });
-        break;
-
-      case 'output':
-        if (msg.data) {
-          this._accumulatedText += msg.data;
-          eventBus.emit('server:chunk', {
-            chunk: msg.data,
-            accumulated: this._accumulatedText,
-          });
-        }
-        break;
-
-      case 'exit':
-        this._finishResponse();
-        break;
-
-      case 'action':
-        // Acción remota del server → dispatch al action-handler
-        eventBus.emit('action:request', { id: msg.id, tool: msg.tool, args: msg.args });
-        break;
-
-      case 'buttons':
-        eventBus.emit('server:buttons', msg.data);
-        break;
-
-      case 'voice':
-        eventBus.emit('server:voice', { base64: msg.data });
-        break;
-
-      default:
-        eventBus.emit('server:message', msg);
-        break;
-    }
-  }
-
-  _finishResponse() {
-    const text = this._accumulatedText;
-    this._accumulatedText = '';
-    this._busy = false;
-    eventBus.emit('server:done', { text });
-    eventBus.emit('server:busy', false);
   }
 
   // ── Relay fallback ──────────────────────────────────────────────────────
@@ -468,11 +356,11 @@ export class NodrizaClient {
 
   _closePeer() {
     if (this._dc) {
-      try { this._dc.close(); } catch {}
+      try { this._dc.close(); } catch (e) { dbg('nodriza', 'error cerrando DC', e); }
       this._dc = null;
     }
     if (this._pc) {
-      try { this._pc.close(); } catch {}
+      try { this._pc.close(); } catch (e) { dbg('nodriza', 'error cerrando PC', e); }
       this._pc = null;
     }
     this._peerId = null;
@@ -488,10 +376,12 @@ export class NodrizaClient {
 
   _scheduleReconnect() {
     clearTimeout(this._reconnectTimer);
-    dbg('nodriza', `reconectando en ${this._reconnectDelay}ms...`);
+    // Jitter: delay * (0.5 – 1.0) para evitar thundering herd
+    const jitter = this._reconnectDelay * (0.5 + Math.random() * 0.5);
+    dbg('nodriza', `reconectando en ${Math.round(jitter)}ms...`);
     this._reconnectTimer = setTimeout(() => {
       this._reconnectDelay = Math.min(this._reconnectDelay * 2, this._reconnectMax);
       this.connect();
-    }, this._reconnectDelay);
+    }, jitter);
   }
 }

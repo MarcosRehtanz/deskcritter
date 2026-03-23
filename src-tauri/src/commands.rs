@@ -1,13 +1,24 @@
 use sysinfo::System;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::{atomic::{AtomicBool, Ordering}, Mutex, OnceLock};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+
+/// Flag para evitar arranques múltiples del HTTP API
+static HTTP_API_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Instancia compartida de System para evitar recrearla en cada llamada
+pub(crate) static SYSTEM: OnceLock<Mutex<System>> = OnceLock::new();
+
+pub(crate) fn get_system() -> &'static Mutex<System> {
+    SYSTEM.get_or_init(|| Mutex::new(System::new()))
+}
 
 /// Retorna la memoria disponible del sistema en MB
 #[tauri::command]
 pub fn get_free_memory_mb() -> u64 {
-    let mut sys = System::new();
+    let mut sys = get_system().lock().unwrap();
     sys.refresh_memory();
     sys.available_memory() / (1024 * 1024)
 }
@@ -70,6 +81,22 @@ pub fn register_shortcuts(app: tauri::AppHandle, keys: Vec<String>) -> Result<()
         gs.register(Shortcut::new(mods, code)).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Inicia la API HTTP local en el puerto dado. Retorna el token generado.
+/// Solo se puede arrancar una vez; llamadas subsiguientes retornan error.
+#[tauri::command]
+pub fn start_local_api(app: tauri::AppHandle, port: u16) -> Result<String, String> {
+    if HTTP_API_STARTED.swap(true, Ordering::SeqCst) {
+        return Err("HTTP API ya está corriendo".into());
+    }
+
+    let token = uuid::Uuid::new_v4().to_string();
+    let token_clone = token.clone();
+
+    crate::http_api::start_http_api(app, port, token_clone);
+
+    Ok(token)
 }
 
 fn _log_path(app: &tauri::AppHandle) -> std::path::PathBuf {

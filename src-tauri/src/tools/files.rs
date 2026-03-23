@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 #[derive(Serialize)]
@@ -15,23 +16,38 @@ pub struct FileEntry {
 }
 
 /// Lee un archivo con offset/limit opcionales (líneas)
+/// Usa BufReader cuando hay offset/limit para evitar cargar todo en memoria
 #[tauri::command]
 pub fn cu_file_read(
     path: String,
     offset: Option<usize>,
     limit: Option<usize>,
 ) -> Result<FileReadResult, String> {
+    // Si hay offset o limit, usar BufReader + skip/take sin cargar todo
+    if offset.is_some() || limit.is_some() {
+        let file = fs::File::open(&path)
+            .map_err(|e| format!("Error leyendo {}: {}", path, e))?;
+        let reader = BufReader::new(file);
+        let skip = offset.unwrap_or(0);
+        let lines: Vec<String> = if let Some(lim) = limit {
+            reader.lines()
+                .skip(skip)
+                .take(lim)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("Error leyendo {}: {}", path, e))?
+        } else {
+            reader.lines()
+                .skip(skip)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| format!("Error leyendo {}: {}", path, e))?
+        };
+        return Ok(FileReadResult { content: lines.join("\n") });
+    }
+
+    // Sin offset/limit: leer todo directamente
     let content = fs::read_to_string(&path)
         .map_err(|e| format!("Error leyendo {}: {}", path, e))?;
-
-    let lines: Vec<&str> = content.lines().collect();
-    let start = offset.unwrap_or(0).min(lines.len());
-    let end = limit
-        .map(|l| (start + l).min(lines.len()))
-        .unwrap_or(lines.len());
-
-    let result = lines[start..end].join("\n");
-    Ok(FileReadResult { content: result })
+    Ok(FileReadResult { content })
 }
 
 /// Escribe contenido a un archivo, creando directorios padres si es necesario

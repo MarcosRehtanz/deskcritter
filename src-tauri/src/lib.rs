@@ -92,15 +92,8 @@ pub fn run() {
         let _ = window.set_shadow(false);
       }
 
-      // Iniciar API HTTP local si está configurado
-      // Por ahora arranca siempre en el puerto default; la config se lee desde JS
-      // y se puede deshabilitar desde el panel de configuración
-      let app_handle = app.handle().clone();
-      std::thread::spawn(move || {
-        // Pequeño delay para que la app arranque primero
-        std::thread::sleep(std::time::Duration::from_secs(2));
-        http_api::start_http_api(app_handle, 17842);
-      });
+      // HTTP API local se inicia desde el frontend via start_local_api
+      // solo si localApiEnabled === true en la config
 
       // Los atajos globales se registran desde JS via register_shortcuts
 
@@ -168,6 +161,7 @@ pub fn run() {
       commands::write_log,
       commands::get_log_path,
       commands::register_shortcuts,
+      commands::start_local_api,
       tools::bash::cu_bash,
       tools::files::cu_file_read,
       tools::files::cu_file_write,

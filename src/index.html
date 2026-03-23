@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>deskcritter</title>
+  <link rel="modulepreload" href="js/event-bus.js">
+  <link rel="modulepreload" href="js/config.js">
+  <link rel="modulepreload" href="js/db.js">
+  <link rel="modulepreload" href="js/debug.js">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
@@ -376,6 +380,17 @@
     .speech-bubble strong { color: #111; }
     .speech-bubble em { color: #444; }
     .speech-bubble del { color: #999; }
+
+    /* Animación de puntos en burbuja (CSS, sin setInterval) */
+    .bubble-dots::after {
+      content: '.';
+      animation: bubble-dots 1.6s steps(3, end) infinite;
+    }
+    @keyframes bubble-dots {
+      0%   { content: '.'; }
+      33%  { content: '..'; }
+      66%  { content: '...'; }
+    }
 
     .bubble-close {
       position: absolute;

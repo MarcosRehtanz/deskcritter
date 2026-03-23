@@ -77,11 +77,27 @@ export async function loadPlugins(sprite, fsm) {
               emit: (event, data) => eventBus.emit(event, data),
               getConfig: (key) => config.get(key),
             };
-            const fn = new Function('api', initResult.content);
-            fn(pluginApi);
+            let fn;
+            try {
+              fn = new Function('api', initResult.content);
+            } catch (syntaxErr) {
+              dbg('plugins', `error de sintaxis en init de ${manifest.name}:`, syntaxErr.message);
+              continue;
+            }
+            // Ejecutar con timeout de 5s
+            const PLUGIN_TIMEOUT = 5000;
+            const result = fn(pluginApi);
+            if (result && typeof result.then === 'function') {
+              await Promise.race([
+                result,
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('timeout')), PLUGIN_TIMEOUT)
+                ),
+              ]);
+            }
             dbg('plugins', `init ejecutado para plugin ${manifest.name}`);
           } catch (e) {
-            dbg('plugins', `error ejecutando init de ${manifest.name}:`, e);
+            dbg('plugins', `error ejecutando init de ${manifest.name}:`, e.message || e);
           }
         }
 

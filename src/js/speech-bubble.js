@@ -3,20 +3,10 @@
 import { eventBus } from './event-bus.js';
 import { dbg } from './debug.js';
 import * as config from './config.js';
-import { renderMarkdown } from './chat.js';
+import { stripAnsi, renderMarkdown } from './text-utils.js';
 
 const DISMISS_DELAY = 12000;
-const DOTS_CYCLE = ['.', '..', '...', '..', '.'];
-
-function stripAnsi(str) {
-  return str
-    .replace(/\x1B\[[0-9;?]*[A-Za-z@]/g, '')
-    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, '')
-    .replace(/\x1B[A-Z\\]/g, '')
-    .replace(/[\x00-\x08\x0E-\x1F\x7F]/g, '')
-    .replace(/\r/g, '')
-    .trim();
-}
+const RENDER_DEBOUNCE_MS = 150;
 
 // Limpia markdown del texto para que el TTS no lea asteriscos ni símbolos
 export function cleanForTts(text) {
@@ -46,7 +36,8 @@ export class SpeechBubble {
     this._textEl = null;
     this._closeBtn = null;
     this._dismissTimer = null;
-    this._dotsTimer = null;
+    this._renderTimer = null;
+    this._pendingText = null;
     this._built = false;
   }
 
@@ -85,47 +76,63 @@ export class SpeechBubble {
     return config.get('bubbleEnabled') !== false;
   }
 
-  // Mostrar texto (o actualizar si ya visible)
+  // Mostrar texto (o actualizar si ya visible) — con debounce durante streaming
   show(text) {
     if (!this._isEnabled()) return;
     if (!text || !text.trim()) return;
     this._ensureDom();
-    clearInterval(this._dotsTimer);
+    this._stopDots();
     clearTimeout(this._dismissTimer);
 
     const clean = stripAnsi(text);
     if (!clean) return;
 
-    this._textEl.innerHTML = renderMarkdown(clean);
-    this._el.classList.remove('hidden');
-    this._el.classList.add('visible');
-    this._visible = true;
-    this._el.scrollTop = this._el.scrollHeight;
-    eventBus.emit('bubble:show');
+    // Hacer visible inmediatamente, pero debounce el render costoso
+    if (!this._visible) {
+      this._el.classList.remove('hidden');
+      this._el.classList.add('visible');
+      this._visible = true;
+      eventBus.emit('bubble:show');
+    }
+
+    this._pendingText = clean;
+    if (!this._renderTimer) {
+      this._renderTimer = setTimeout(() => this._flushRender(), RENDER_DEBOUNCE_MS);
+    }
   }
 
-  // Mostrar animación de puntos
+  // Render inmediato del texto pendiente
+  _flushRender() {
+    clearTimeout(this._renderTimer);
+    this._renderTimer = null;
+    if (this._pendingText && this._textEl) {
+      this._textEl.innerHTML = renderMarkdown(this._pendingText);
+      this._el.scrollTop = this._el.scrollHeight;
+      this._pendingText = null;
+    }
+  }
+
+  // Mostrar animación de puntos (CSS animation, sin setInterval)
   showDots() {
     if (!this._isEnabled()) return;
     this._ensureDom();
     clearTimeout(this._dismissTimer);
-    let idx = 0;
-    this._textEl.textContent = DOTS_CYCLE[0];
+    this._textEl.innerHTML = '<span class="bubble-dots"></span>';
     this._el.classList.remove('hidden');
     this._el.classList.add('visible');
     this._visible = true;
-
-    clearInterval(this._dotsTimer);
-    this._dotsTimer = setInterval(() => {
-      idx = (idx + 1) % DOTS_CYCLE.length;
-      this._textEl.textContent = DOTS_CYCLE[idx];
-    }, 400);
+    this._dotsActive = true;
     eventBus.emit('bubble:show');
   }
 
-  // Respuesta completa — iniciar timer de dismiss
+  _stopDots() {
+    this._dotsActive = false;
+  }
+
+  // Respuesta completa — flush pendiente + iniciar timer de dismiss
   done() {
-    clearInterval(this._dotsTimer);
+    this._stopDots();
+    this._flushRender();
     if (this._el) this._el.scrollTop = 0;
     clearTimeout(this._dismissTimer);
     const delay = config.get('bubbleDismissMs') ?? DISMISS_DELAY;
@@ -169,7 +176,10 @@ export class SpeechBubble {
   hide() {
     if (!this._visible) return;
     clearTimeout(this._dismissTimer);
-    clearInterval(this._dotsTimer);
+    clearTimeout(this._renderTimer);
+    this._renderTimer = null;
+    this._pendingText = null;
+    this._stopDots();
     this._visible = false;
     if (this._el) {
       this._el.classList.remove('visible');

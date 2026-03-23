@@ -1,5 +1,5 @@
 use serde::Serialize;
-use sysinfo::System;
+use crate::commands::get_system;
 
 #[derive(Serialize)]
 pub struct ProcessInfo {
@@ -21,7 +21,7 @@ pub async fn cu_process_list(
     filter: Option<String>,
     max_results: Option<usize>,
 ) -> Result<ProcessListResult, String> {
-    let mut sys = System::new();
+    let mut sys = get_system().lock().unwrap();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let max = max_results.unwrap_or(50);
@@ -53,7 +53,7 @@ pub async fn cu_process_list(
 /// Termina un proceso por PID
 #[tauri::command]
 pub async fn cu_process_kill(pid: u32) -> Result<bool, String> {
-    let mut sys = System::new();
+    let mut sys = get_system().lock().unwrap();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let pid = sysinfo::Pid::from_u32(pid);

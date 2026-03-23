@@ -3,12 +3,15 @@
 // Nota: el hotkey Ctrl+Shift+M se registra como global shortcut en main.js
 import { eventBus } from './event-bus.js';
 
+const CURSOR_THROTTLE_MS = 16; // ~1 frame
+
 export class InputHandler {
   constructor(canvas) {
     this._canvas = canvas;
     this.isDragging = false;
     this._dragOffsetX = 0;
     this._dragOffsetY = 0;
+    this._lastCursorTime = 0;
 
     this._onMouseDown = this._handleMouseDown.bind(this);
     this._onMouseMove = this._handleMouseMove.bind(this);
@@ -45,6 +48,9 @@ export class InputHandler {
       this._dragOffsetY = e.screenY;
       eventBus.emit('input:dragMove', { deltaX, deltaY });
     } else {
+      const now = performance.now();
+      if (now - this._lastCursorTime < CURSOR_THROTTLE_MS) return;
+      this._lastCursorTime = now;
       const rect = this._canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const centerX = this._canvas.width / 2;

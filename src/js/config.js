@@ -28,8 +28,8 @@ const DEFAULTS = {
   bubbleEnabled: true,
   // Nodriza (conexión P2P vía señalización)
   nodrizaUrl: 'ws://localhost:3000/signaling',
-  nodrizaClientId: 'cmn0agkk4000311w718n0z3co',
-  nodrizaApiKey: '781217cad3ca6552ba650d66b02ff69f59861331e01df35f90e8034d2ac96e05',
+  nodrizaClientId: '',
+  nodrizaApiKey: '',
   // Física
   physicsGravity: 1200,
   physicsWalkSpeed: 70,
@@ -109,21 +109,11 @@ export async function init() {
   const stored = await db.getAllConfig();
   dbg('config', 'config cargada de DB', stored);
 
-  // Insertar defaults que no existan aún en la DB
-  for (const [key, value] of Object.entries(DEFAULTS)) {
-    if (!(key in stored)) {
-      await db.setConfig(key, value);
-      stored[key] = value;
-    }
-  }
-
-  // Migración: configurar nodriza P2P si no tiene credenciales
-  if (!stored.nodrizaClientId) {
-    await db.setConfig('nodrizaClientId', DEFAULTS.nodrizaClientId);
-    await db.setConfig('nodrizaApiKey', DEFAULTS.nodrizaApiKey);
-    stored.nodrizaClientId = DEFAULTS.nodrizaClientId;
-    stored.nodrizaApiKey = DEFAULTS.nodrizaApiKey;
-    dbg('config', 'migrado: credenciales nodriza configuradas');
+  // Insertar defaults que no existan aún en la DB (batch)
+  const missing = Object.entries(DEFAULTS).filter(([key]) => !(key in stored));
+  if (missing.length > 0) {
+    await Promise.all(missing.map(([key, value]) => db.setConfig(key, value)));
+    for (const [key, value] of missing) stored[key] = value;
   }
 
   // Migración: limpiar provider (nodriza usa el del server)
@@ -164,9 +154,7 @@ export async function set(partial) {
 }
 
 export async function reset() {
-  for (const [key, value] of Object.entries(DEFAULTS)) {
-    await db.setConfig(key, value);
-  }
+  await Promise.all(Object.entries(DEFAULTS).map(([key, value]) => db.setConfig(key, value)));
   _cache = { ...DEFAULTS };
   return { ..._cache };
 }

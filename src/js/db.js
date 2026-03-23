@@ -1,6 +1,5 @@
 // Módulo singleton de acceso a SQLite via tauri-plugin-sql
 // Usa invoke() directo en vez de la clase Database (no disponible sin bundler)
-// Expone window.__DESKCRITTER_DB__ para que config-panel-app.js pueda usarlo
 
 import { dbg } from './debug.js';
 
@@ -122,21 +121,3 @@ export async function deleteOldMessages(maxMessages) {
   );
 }
 
-// Exponer para ventanas sin módulos ES (config-panel-app.js)
-window.__DESKCRITTER_DB__ = {
-  init,
-  getConfig,
-  setConfig,
-  getAllConfig,
-  getCharacters,
-  getActiveCharacter,
-  addCharacter,
-  deleteCharacter,
-  setActiveCharacter,
-  deactivateAllCharacters,
-  addMessage,
-  getMessages,
-  searchMessages,
-  getRecentSessions,
-  deleteOldMessages,
-};

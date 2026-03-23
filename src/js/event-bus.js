@@ -35,7 +35,7 @@ class EventBus {
     if (!EventBus._noisy.has(event)) dbg('bus', event, data);
     const list = this._listeners[event];
     if (!list) return;
-    list.forEach(fn => fn(data));
+    [...list].forEach(fn => fn(data));
   }
 }
 

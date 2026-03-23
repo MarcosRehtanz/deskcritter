@@ -5,13 +5,19 @@ export class WindowManager {
   constructor() {
     this._win = null;
     this._tauri = null;
+    // Cache para evitar IPC redundantes
+    this._lastW = null;
+    this._lastH = null;
+    this._lastX = null;
+    this._lastY = null;
   }
 
   async init() {
     try {
       this._tauri = window.__TAURI__.window;
       this._win = this._tauri.getCurrentWindow();
-    } catch {
+    } catch (e) {
+      console.warn('[wm]', 'init error', e);
       this._win = null;
       this._tauri = null;
     }
@@ -23,7 +29,8 @@ export class WindowManager {
     try {
       const pos = await this._win.outerPosition();
       return { x: pos.x, y: pos.y };
-    } catch {
+    } catch (e) {
+      console.warn('[wm]', 'getPosition error', e);
       return { x: 600, y: 400 };
     }
   }
@@ -31,11 +38,15 @@ export class WindowManager {
   // Posicionar la ventana en coordenadas físicas absolutas
   async setPosition(x, y) {
     if (!this._tauri) return;
+    const rx = Math.round(x), ry = Math.round(y);
+    if (this._lastX === rx && this._lastY === ry) return;
+    this._lastX = rx;
+    this._lastY = ry;
     try {
       await this._win.setPosition(
-        new this._tauri.PhysicalPosition(Math.round(x), Math.round(y))
+        new this._tauri.PhysicalPosition(rx, ry)
       );
-    } catch {}
+    } catch (e) { console.warn('[wm]', 'setPosition error', e); }
   }
 
   // Mover la ventana relativamente (para drag)
@@ -46,17 +57,20 @@ export class WindowManager {
       await this._win.setPosition(
         new this._tauri.PhysicalPosition(pos.x + deltaX, pos.y + deltaY)
       );
-    } catch {}
+    } catch (e) { console.warn('[wm]', 'moveBy error', e); }
   }
 
   // Redimensionar la ventana (coordenadas lógicas)
   async setSize(width, height) {
     if (!this._tauri) return;
+    if (this._lastW === width && this._lastH === height) return;
+    this._lastW = width;
+    this._lastH = height;
     try {
       await this._win.setSize(
         new this._tauri.LogicalSize(width, height)
       );
-    } catch {}
+    } catch (e) { console.warn('[wm]', 'setSize error', e); }
   }
 
   // Toggle visibilidad de la ventana
@@ -69,7 +83,7 @@ export class WindowManager {
       } else {
         await this._win.show();
       }
-    } catch {}
+    } catch (e) { console.warn('[wm]', 'toggleVisibility error', e); }
   }
 
   // Obtener todos los monitores disponibles
@@ -85,7 +99,8 @@ export class WindowManager {
         y: m.position.y,
         scaleFactor: m.scaleFactor,
       }));
-    } catch {
+    } catch (e) {
+      console.warn('[wm]', 'getAvailableMonitors error', e);
       return [];
     }
   }
@@ -101,7 +116,8 @@ export class WindowManager {
         height: monitor.size.height,
         scaleFactor: monitor.scaleFactor
       };
-    } catch {
+    } catch (e) {
+      console.warn('[wm]', 'getMonitorInfo error', e);
       return { width: 1920, height: 1080, scaleFactor: 1 };
     }
   }

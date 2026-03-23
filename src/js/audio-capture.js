@@ -13,6 +13,7 @@ export class AudioCapture {
     this._supported = false;
     this._listening = false;
     this._transcribing = false;
+    this._cachedMimeType = null;
   }
 
   get supported() { return this._supported; }
@@ -38,7 +39,8 @@ export class AudioCapture {
           noiseSuppression: true,
         }
       });
-      dbg('audio', 'micrófono autorizado');
+      this._cachedMimeType = this._getSupportedMimeType();
+      dbg('audio', 'micrófono autorizado, mimeType:', this._cachedMimeType);
     } catch (err) {
       dbg('audio', 'micrófono denegado:', err.message);
       this._supported = false;
@@ -53,7 +55,7 @@ export class AudioCapture {
 
     this._audioChunks = [];
     this._mediaRecorder = new MediaRecorder(this._stream, {
-      mimeType: this._getSupportedMimeType(),
+      mimeType: this._cachedMimeType || this._getSupportedMimeType(),
     });
 
     this._mediaRecorder.ondataavailable = (e) => {
@@ -77,7 +79,7 @@ export class AudioCapture {
     if (!this._listening || !this._mediaRecorder) return;
     try {
       this._mediaRecorder.stop();
-    } catch {}
+    } catch (e) { dbg('audio', 'error parando recorder', e); }
   }
 
   _getSupportedMimeType() {
@@ -109,16 +111,19 @@ export class AudioCapture {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: 16000,
       });
-      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-      let pcm = audioBuffer.getChannelData(0);
-      dbg('audio', 'PCM decodificado', { samples: pcm.length, sampleRate: audioBuffer.sampleRate, duration: (pcm.length / audioBuffer.sampleRate).toFixed(2) + 's' });
+      let pcm;
+      try {
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        pcm = audioBuffer.getChannelData(0);
+        dbg('audio', 'PCM decodificado', { samples: pcm.length, sampleRate: audioBuffer.sampleRate, duration: (pcm.length / audioBuffer.sampleRate).toFixed(2) + 's' });
 
-      if (audioBuffer.sampleRate !== 16000) {
-        dbg('audio', 'resampleando', { from: audioBuffer.sampleRate, to: 16000 });
-        pcm = _resample(pcm, audioBuffer.sampleRate, 16000);
+        if (audioBuffer.sampleRate !== 16000) {
+          dbg('audio', 'resampleando', { from: audioBuffer.sampleRate, to: 16000 });
+          pcm = _resample(pcm, audioBuffer.sampleRate, 16000);
+        }
+      } finally {
+        await audioCtx.close();
       }
-
-      await audioCtx.close();
 
       if (!useLocal) {
         // Enviar PCM como base64 al server para transcripción remota

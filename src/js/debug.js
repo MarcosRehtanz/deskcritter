@@ -20,7 +20,6 @@ export async function initDebug() {
       logPath = await window.__TAURI__.core.invoke('get_log_path');
     } catch {}
     console.log(`%c[debug] modo debug activado — logs en ${logPath}`, 'color:#4caf50;font-weight:bold');
-    _flushTimer = setInterval(_flush, FLUSH_INTERVAL);
     window.addEventListener('beforeunload', _flush);
   }
 }
@@ -48,6 +47,15 @@ export function dbg(module, msg, data) {
 
   // Buffer para archivo
   _buffer.push(line);
+  _scheduleFlush();
+}
+
+function _scheduleFlush() {
+  if (_flushTimer) return;
+  _flushTimer = setTimeout(() => {
+    _flushTimer = null;
+    _flush();
+  }, FLUSH_INTERVAL);
 }
 
 async function _flush() {
@@ -65,10 +73,8 @@ export function isDebug() {
 
 export function toggleDebug() {
   _enabled = !_enabled;
-  if (_enabled && !_flushTimer) {
-    _flushTimer = setInterval(_flush, FLUSH_INTERVAL);
-  } else if (!_enabled && _flushTimer) {
-    clearInterval(_flushTimer);
+  if (!_enabled && _flushTimer) {
+    clearTimeout(_flushTimer);
     _flush();
     _flushTimer = null;
   }

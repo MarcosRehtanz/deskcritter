@@ -971,6 +971,7 @@ dependencies = [
  "tauri-plugin-sql",
  "tiny_http",
  "tokio",
+ "uuid",
  "walkdir",
  "xcap",
 ]

@@ -31,7 +31,7 @@ const MODELS_TO_PREDOWNLOAD = [
 ];
 
 // Defaults (se sobreescriben desde config si disponibles)
-const IDLE_TIMEOUT_MS_DEFAULT = 60 * 1000;
+const IDLE_TIMEOUT_MS_DEFAULT = 15 * 1000;
 const MAX_RAM_MB_DEFAULT = 2048;
 
 function getIdleTimeoutMs() {
@@ -42,14 +42,25 @@ function getMaxRamMb() {
   return config.get('whisperMaxRamMb') ?? MAX_RAM_MB_DEFAULT;
 }
 
+// ─── Cache de memoria libre (evita IPC en cada llamada) ────────
+let _cachedFreeMB = null;
+let _cachedFreeMBTime = 0;
+const FREE_MB_CACHE_MS = 2000;
+
 // ─── Funciones de soporte ──────────────────────────────────────
 
 async function _getFreeMB() {
-  try {
-    return await window.__TAURI__.core.invoke('get_free_memory_mb');
-  } catch {
-    return (navigator.deviceMemory || 4) * 1024;
+  const now = Date.now();
+  if (_cachedFreeMB !== null && now - _cachedFreeMBTime < FREE_MB_CACHE_MS) {
+    return _cachedFreeMB;
   }
+  try {
+    _cachedFreeMB = await window.__TAURI__.core.invoke('get_free_memory_mb');
+  } catch {
+    _cachedFreeMB = (navigator.deviceMemory || 4) * 1024;
+  }
+  _cachedFreeMBTime = now;
+  return _cachedFreeMB;
 }
 
 async function _loadTransformers() {

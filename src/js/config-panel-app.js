@@ -1,5 +1,6 @@
 // Lógica del panel de configuración (corre dentro de la ventana secundaria)
-// Usa SQLite via window.__DESKCRITTER_DB__ (expuesto por db.js)
+// Importa db.js directamente como módulo ES
+import * as db from './db.js';
 
 const DEFAULTS = {
   serverUrl: 'ws://localhost:3001',
@@ -97,19 +98,6 @@ const DEFAULTS = {
   pluginsEnabled: false,
   pluginsDir: 'plugins/',
 };
-
-let db = null;
-
-// --- Esperar a que db.js exponga el singleton ---
-
-async function waitForDb() {
-  // db.js se carga como módulo antes que este archivo, pero puede tardar
-  for (let i = 0; i < 50; i++) {
-    if (window.__DESKCRITTER_DB__) return window.__DESKCRITTER_DB__;
-    await new Promise(r => setTimeout(r, 100));
-  }
-  throw new Error('DB no disponible');
-}
 
 // --- Leer config desde SQLite ---
 
@@ -447,7 +435,7 @@ async function listenEvents() {
       dot.textContent = connected ? 'conectado' : 'desconectado';
       dot.className = 'cp-status ' + (connected ? 'connected' : 'disconnected');
     });
-  } catch {}
+  } catch (e) { console.warn('[config-panel]', 'error escuchando eventos', e); }
 }
 
 // --- Navegación del menú lateral ---
@@ -683,7 +671,6 @@ function populateVoices(selectedVoice) {
 // =============================================
 
 async function initApp() {
-  db = await waitForDb();
   await db.init();
 
   await sync();

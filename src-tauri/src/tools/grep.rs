@@ -1,7 +1,11 @@
 use serde::Serialize;
 use regex::Regex;
 use std::fs;
+use std::io::Read;
 use walkdir::WalkDir;
+
+const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024; // 10MB
+const BINARY_CHECK_SIZE: usize = 8192;
 
 #[derive(Serialize)]
 pub struct GrepMatch {
@@ -44,7 +48,27 @@ pub fn cu_grep(
             }
         }
 
-        // Saltar archivos binarios (intento de lectura como texto)
+        // Saltar archivos > 10MB
+        if let Ok(meta) = entry.metadata() {
+            if meta.len() > MAX_FILE_SIZE {
+                continue;
+            }
+        }
+
+        // Saltar archivos binarios (null bytes en los primeros 8KB)
+        {
+            let mut buf = vec![0u8; BINARY_CHECK_SIZE];
+            match fs::File::open(entry.path()) {
+                Ok(mut f) => {
+                    let n = f.read(&mut buf).unwrap_or(0);
+                    if buf[..n].contains(&0) {
+                        continue;
+                    }
+                }
+                Err(_) => continue,
+            }
+        }
+
         let content = match fs::read_to_string(entry.path()) {
             Ok(c) => c,
             Err(_) => continue,
