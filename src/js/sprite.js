@@ -10,9 +10,11 @@ export class SpriteAnimator {
     this.currentFrame = 0;
     this.elapsed = 0;
     this.image = null;
+    this._lastDrawnFrame = -1;
+    this._lastDrawnAnim = null;
   }
 
-  // Carga la imagen del sprite sheet
+  // Carga la imagen del sprite sheet (path o data URL)
   async loadSheet(src) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -20,6 +22,21 @@ export class SpriteAnimator {
       img.onerror = reject;
       img.src = src;
     });
+  }
+
+  // Recarga el sprite sheet (para cambio de personaje en caliente)
+  async reloadSheet(src) {
+    await this.loadSheet(src);
+    this.currentFrame = 0;
+    this.elapsed = 0;
+  }
+
+  // Cambiar escala en vivo (resize canvas)
+  setScale(n) {
+    this.scale = n;
+    const canvas = this.ctx.canvas;
+    canvas.width = this.frameWidth * n;
+    canvas.height = this.frameHeight * n;
   }
 
   // Registra una animación: nombre, fila en el sheet, cantidad de frames, velocidad
@@ -33,6 +50,7 @@ export class SpriteAnimator {
     this.currentAnim = name;
     this.currentFrame = 0;
     this.elapsed = 0;
+    this._lastDrawnFrame = -1; // Forzar redibujado
   }
 
   // Actualiza el frame según el tiempo transcurrido
@@ -53,6 +71,11 @@ export class SpriteAnimator {
     if (!this.image || !this.currentAnim) return;
     const anim = this.animations[this.currentAnim];
     if (!anim) return;
+
+    // Skip draw si el frame no cambió
+    if (this.currentAnim === this._lastDrawnAnim && this.currentFrame === this._lastDrawnFrame) return;
+    this._lastDrawnFrame = this.currentFrame;
+    this._lastDrawnAnim = this.currentAnim;
 
     const sx = this.currentFrame * this.frameWidth;
     const sy = anim.row * this.frameHeight;

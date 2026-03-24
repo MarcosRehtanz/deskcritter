@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>deskcritter — Configuración</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      color: #ccc;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 13px;
+    }
+
+    /* --- Layout principal --- */
+    .layout {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .cp-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: linear-gradient(135deg, #16213e 0%, #1a1a3e 100%);
+      border-bottom: 1px solid #2a2a4a;
+      cursor: move;
+      flex-shrink: 0;
+    }
+    .cp-header-title {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .cp-header-title .cp-app-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #eee;
+      letter-spacing: 0.3px;
+    }
+    .cp-header-title .cp-app-sub {
+      font-size: 10px;
+      color: #6b7a99;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .cp-header button {
+      background: none;
+      border: none;
+      color: #aaa;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .cp-header button:hover { color: #fff; background: rgba(255,255,255,0.1); }
+
+    .cp-main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* --- Menú lateral --- */
+    .cp-sidebar {
+      width: 170px;
+      background: #13132a;
+      border-right: 1px solid #2a2a4a;
+      padding: 6px 0;
+      flex-shrink: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cp-sidebar-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: #4a5070;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      padding: 14px 16px 6px;
+      user-select: none;
+    }
+    .cp-sidebar-label:first-child {
+      padding-top: 8px;
+    }
+
+    .cp-sidebar button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 9px 16px;
+      background: none;
+      border: none;
+      color: #7a7a9a;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, color 0.15s;
+      border-left: 2px solid transparent;
+    }
+    .cp-sidebar button:hover {
+      background: rgba(255,255,255,0.04);
+      color: #b0b0cc;
+    }
+    .cp-sidebar button.active {
+      background: rgba(91,187,136,0.08);
+      color: #5bb;
+      border-left-color: #5bb;
+    }
+    .cp-sidebar button .icon {
+      font-size: 14px;
+      width: 18px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .cp-sidebar-footer {
+      margin-top: auto;
+      padding: 10px 16px;
+      font-size: 9px;
+      color: #3a3a55;
+      border-top: 1px solid #222244;
+    }
+
+    /* --- Contenido (paneles) --- */
+    .cp-content {
+      flex: 1;
+      padding: 20px 24px;
+      overflow-y: auto;
+    }
+    .cp-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    .cp-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .cp-content::-webkit-scrollbar-thumb {
+      background: #2a2a4a;
+      border-radius: 3px;
+    }
+    .cp-content::-webkit-scrollbar-thumb:hover {
+      background: #3a3a5a;
+    }
+
+    .cp-page {
+      display: none;
+    }
+    .cp-page.active {
+      display: block;
+    }
+
+    .cp-page-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #eee;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+
+    /* --- Group cards --- */
+    .cp-group {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    .cp-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #8899bb;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cp-group-title .gicon {
+      font-size: 13px;
+      opacity: 0.7;
+    }
+
+    /* --- Info tooltips --- */
+    .cp-info {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: rgba(91,187,136,0.15);
+      color: #5b8;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: help;
+      position: relative;
+      vertical-align: middle;
+      margin-left: 4px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .cp-info .cp-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e1e38;
+      color: #bbb;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.5;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      max-width: 280px;
+      min-width: 180px;
+      white-space: normal;
+      text-transform: none;
+      letter-spacing: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .cp-info .cp-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: #333;
+    }
+    .cp-info:hover .cp-tooltip {
+      opacity: 1;
+    }
+
+    /* --- Campos del formulario --- */
+    .cp-field {
+      margin-bottom: 14px;
+    }
+    .cp-field label {
+      display: block;
+      color: #aaa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 4px;
+    }
+    .cp-field input[type="text"],
+    .cp-field input[type="number"],
+    .cp-field select {
+      display: block;
+      width: 100%;
+      padding: 7px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ddd;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .cp-field input[type="text"]:focus,
+    .cp-field input[type="number"]:focus,
+    .cp-field select:focus {
+      outline: none;
+      border-color: #5b8;
+    }
+    /* Ocultar flechas del input number */
+    .cp-field input[type="number"]::-webkit-inner-spin-button,
+    .cp-field input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .cp-field input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    /* --- Toggle switch --- */
+    .cp-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .cp-toggle input[type="checkbox"] {
+      display: none;
+    }
+    .cp-switch {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      background: #2a2a4a;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .cp-switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      background: #666;
+      border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .cp-toggle input[type="checkbox"]:checked + .cp-switch {
+      background: rgba(91,187,136,0.3);
+    }
+    .cp-toggle input[type="checkbox"]:checked + .cp-switch::after {
+      transform: translateX(16px);
+      background: #5b8;
+    }
+    .cp-toggle .cp-toggle-label {
+      color: #ccc;
+      font-size: 13px;
+    }
+
+    .cp-row {
+      display: flex;
+      gap: 16px;
+    }
+    .cp-row .cp-field {
+      flex: 1;
+    }
+
+    .cp-status {
+      margin: 4px 0 10px;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+    .cp-status.connected {
+      color: #4caf50;
+      background: rgba(76,175,80,0.1);
+    }
+    .cp-status.disconnected {
+      color: #f44336;
+      background: rgba(244,67,54,0.1);
+    }
+
+    .cp-btn {
+      padding: 8px 16px;
+      background: #2a2a4a;
+      border: 1px solid #3a3a5a;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .cp-btn:hover { background: #3a3a5a; border-color: #4a4a6a; }
+    .cp-btn.saved { background: #2a4a3a; border-color: #5b8; color: #5b8; }
+
+    /* --- Personaje --- */
+    .cp-sprite-upload {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .cp-sprite-filename {
+      color: #888;
+      font-size: 11px;
+      font-style: italic;
+    }
+    .cp-sprite-info {
+      margin: 12px 0;
+      padding: 12px 16px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid #2a2a4a;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #888;
+      line-height: 1.6;
+    }
+    .cp-sprite-info p {
+      margin-bottom: 6px;
+      color: #aaa;
+    }
+    .cp-sprite-info ul {
+      padding-left: 18px;
+    }
+    .cp-sprite-info b {
+      color: #bbb;
+    }
+    .cp-sprite-preview-box {
+      margin-top: 12px;
+    }
+    .cp-sprite-preview-box label {
+      display: block;
+      color: #aaa;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
+    .cp-sprite-preview {
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 8px;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cp-sprite-preview img {
+      image-rendering: pixelated;
+      max-width: 100%;
+      max-height: 200px;
+    }
+    .cp-sprite-error {
+      color: #f44336;
+      font-size: 11px;
+      margin-top: 6px;
+      min-height: 14px;
+    }
+
+    /* --- Lista de personajes --- */
+    .cp-char-list {
+      list-style: none;
+      margin: 12px 0;
+      padding: 0;
+    }
+    .cp-char-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+    .cp-char-item.active {
+      border-color: #5b8;
+    }
+    .cp-char-thumb {
+      width: 32px;
+      height: 32px;
+      image-rendering: pixelated;
+      border-radius: 2px;
+      background: #1a1a2e;
+      object-fit: contain;
+    }
+    .cp-char-name {
+      flex: 1;
+      font-size: 12px;
+      color: #ccc;
+    }
+    .cp-char-actions {
+      display: flex;
+      gap: 6px;
+    }
+    .cp-char-actions button {
+      background: none;
+      border: 1px solid #444;
+      border-radius: 3px;
+      color: #aaa;
+      font-size: 11px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .cp-char-actions button:hover { color: #fff; border-color: #666; }
+    .cp-char-actions button.active-btn { color: #5b8; border-color: #5b8; }
+    .cp-char-actions button.delete-btn:hover { color: #f44; border-color: #f44; }
+
+    .cp-new-char {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .cp-new-char input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ddd;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    .cp-new-char input[type="text"]:focus {
+      outline: none;
+      border-color: #5b8;
+    }
+
+    /* --- Range sliders --- */
+    .cp-range {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: #0f0f23;
+      border: 1px solid #333;
+      border-radius: 3px;
+      outline: none;
+      margin-top: 4px;
+    }
+    .cp-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: #5b8;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .cp-range:hover::-webkit-slider-thumb {
+      background: #6cc;
+    }
+
+    /* --- Botones footer de página --- */
+    .cp-page-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="cp-header" data-tauri-drag-region>
+      <div class="cp-header-title" data-tauri-drag-region>
+        <span class="cp-app-name" data-tauri-drag-region>DeskCritter</span>
+        <span class="cp-app-sub" data-tauri-drag-region>Configuraci&oacute;n</span>
+      </div>
+      <button id="cp-close">&times;</button>
+    </div>
+    <div class="cp-main">
+
+      <!-- Menú lateral -->
+      <nav class="cp-sidebar">
+        <div class="cp-sidebar-label">General</div>
+        <button class="active" data-page="conexion">
+          <span class="icon">&#128279;</span> Conexi&oacute;n
+        </button>
+        <button data-page="voz">
+          <span class="icon">&#127908;</span> Voz
+        </button>
+        <button data-page="sonidos">
+          <span class="icon">&#128266;</span> Sonidos
+        </button>
+
+        <div class="cp-sidebar-label">Personaje</div>
+        <button data-page="personaje">
+          <span class="icon">&#128054;</span> Personaje
+        </button>
+        <button data-page="apariencia">
+          <span class="icon">&#127912;</span> Apariencia
+        </button>
+        <button data-page="comportamiento">
+          <span class="icon">&#128062;</span> Comportamiento
+        </button>
+        <button data-page="fisica">
+          <span class="icon">&#9881;</span> F&iacute;sica
+        </button>
+
+        <div class="cp-sidebar-label">Sistema</div>
+        <button data-page="atajos">
+          <span class="icon">&#9000;</span> Atajos
+        </button>
+        <button data-page="api">
+          <span class="icon">&#128268;</span> API
+        </button>
+        <button data-page="plugins">
+          <span class="icon">&#129520;</span> Plugins
+        </button>
+        <button data-page="avanzado">
+          <span class="icon">&#128295;</span> Avanzado
+        </button>
+
+        <div class="cp-sidebar-footer">v0.1.0</div>
+      </nav>
+
+      <!-- Contenido -->
+      <div class="cp-content">
+
+        <!-- Página: Conexión -->
+        <div class="cp-page active" id="page-conexion">
+          <div class="cp-page-title">Conexi&oacute;n</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128268;</span> Servidor directo</div>
+            <div class="cp-field">
+              <label>Server URL
+                <span class="cp-info">&#8505;<span class="cp-tooltip">URL del servidor terminal-live. Se usa cuando nodriza est&aacute; deshabilitada.</span></span>
+              </label>
+              <input type="text" id="cp-server-url" spellcheck="false">
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Provider</label>
+                <input type="text" id="cp-provider" spellcheck="false" placeholder="(auto)">
+              </div>
+              <div class="cp-field">
+                <label>Model</label>
+                <input type="text" id="cp-model" spellcheck="false" placeholder="(auto)">
+              </div>
+            </div>
+            <div class="cp-field">
+              <label>Agent Key</label>
+              <input type="text" id="cp-agent-key" spellcheck="false" placeholder="(auto)">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128752;</span> Nodriza (P2P)
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Conexi&oacute;n peer-to-peer mediante nodriza. Si Client ID y API Key est&aacute;n completos, se usa P2P en vez de conexi&oacute;n directa.</span></span>
+            </div>
+            <div class="cp-field">
+              <label>URL de Nodriza</label>
+              <input type="text" id="cp-nodriza-url" spellcheck="false" placeholder="ws://localhost:3000/signaling">
+            </div>
+            <div class="cp-field">
+              <label>Client ID</label>
+              <input type="text" id="cp-nodriza-client-id" spellcheck="false" placeholder="(vac&iacute;o = conexi&oacute;n directa)">
+            </div>
+            <div class="cp-field">
+              <label>API Key</label>
+              <input type="text" id="cp-nodriza-api-key" spellcheck="false" placeholder="(vac&iacute;o = conexi&oacute;n directa)">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128246;</span> Modo offline</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-offline-queue-enabled">
+              <label class="cp-switch" for="cp-offline-queue-enabled"></label>
+              <span class="cp-toggle-label">Encolar mensajes cuando est&aacute; offline
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Si el critter pierde conexi&oacute;n, los mensajes que escribas se guardan y se env&iacute;an autom&aacute;ticamente cuando se reconecte.</span></span>
+              </span>
+            </div>
+            <div class="cp-field">
+              <label>Intentos de reconexi&oacute;n antes de modo offline</label>
+              <input type="number" id="cp-offline-max-retries" placeholder="5" min="0" step="1">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128308;</span> Indicador</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-conn-badge-enabled">
+              <label class="cp-switch" for="cp-conn-badge-enabled"></label>
+              <span class="cp-toggle-label">Mostrar indicador de conexi&oacute;n
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Muestra un punto de color sobre el critter: verde = conectado, rojo = desconectado. Pas&aacute; el mouse encima para ver si usa WebSocket directo o P2P (nodriza).</span></span>
+              </span>
+            </div>
+            <div class="cp-status disconnected" id="cp-conn-status">desconectado</div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn" id="cp-reconnect">Reconectar</button>
+          </div>
+        </div>
+
+        <!-- Página: Personaje -->
+        <div class="cp-page" id="page-personaje">
+          <div class="cp-page-title">Personaje</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128196;</span> Personajes guardados</div>
+            <ul class="cp-char-list" id="cp-char-list">
+              <!-- Se llena dinámicamente -->
+            </ul>
+
+            <div class="cp-new-char">
+              <input type="text" id="cp-new-char-name" placeholder="Nombre del personaje">
+              <button class="cp-btn" id="cp-new-char-file-btn">Seleccionar PNG...</button>
+              <input type="file" id="cp-new-char-file" accept="image/png" style="display:none">
+            </div>
+            <div class="cp-sprite-error" id="cp-sprite-error"></div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128444;</span> Formato del sprite sheet
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Una imagen PNG donde cada fila es una animaci&oacute;n y cada columna es un frame. Todos los frames deben ser de 32&times;32 px.</span></span>
+            </div>
+            <div class="cp-sprite-info">
+              <p>Ancho y alto m&uacute;ltiplos de 32. M&iacute;nimo <b>128&times;160 px</b> (4 columnas &times; 5 filas).</p>
+              <p><b>Filas obligatorias:</b></p>
+              <ul>
+                <li>Fila 0 &mdash; <b>idle</b>: animaci&oacute;n de reposo (loop)</li>
+                <li>Fila 1 &mdash; <b>blink</b>: parpadeo (se reproduce una vez)</li>
+                <li>Fila 2 &mdash; <b>look_left</b>: mirar a la izquierda</li>
+                <li>Fila 3 &mdash; <b>look_right</b>: mirar a la derecha</li>
+                <li>Fila 4 &mdash; <b>drag</b>: siendo arrastrado / cayendo</li>
+              </ul>
+              <p style="margin-top:8px;"><b>Filas opcionales (emociones):</b></p>
+              <ul>
+                <li>Fila 5 &mdash; <b>sleep</b>: dormido (idle prolongado)</li>
+                <li>Fila 6 &mdash; <b>wave</b>: saludar (al conectar)</li>
+                <li>Fila 7 &mdash; <b>celebrate</b>: celebrar (respuesta recibida)</li>
+                <li>Fila 8 &mdash; <b>think</b>: pensando (esperando respuesta)</li>
+                <li>Fila 9 &mdash; <b>sad</b>: triste (desconectado)</li>
+              </ul>
+              <p style="margin-top:6px;">Si una fila opcional no existe, se usa un fallback autom&aacute;tico
+                 (think&rarr;blink, celebrate&rarr;idle r&aacute;pido, etc).</p>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128065;</span> Vista previa</div>
+            <div class="cp-sprite-preview-box">
+              <label>Sprite activo</label>
+              <div class="cp-sprite-preview" id="cp-sprite-preview"></div>
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn" id="cp-sprite-reset">Usar default (sin personaje)</button>
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+        <!-- Página: Voz -->
+        <div class="cp-page" id="page-voz">
+          <div class="cp-page-title">Voz</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#127908;</span> Entrada (STT)</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-audio-enabled">
+              <label class="cp-switch" for="cp-audio-enabled"></label>
+              <span class="cp-toggle-label">Micr&oacute;fono habilitado</span>
+            </div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-whisper-local">
+              <label class="cp-switch" for="cp-whisper-local"></label>
+              <span class="cp-toggle-label">Transcripci&oacute;n local (Whisper)
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Desactivar para enviar audio al server (ahorra ~800MB RAM)</span></span>
+              </span>
+            </div>
+            <div class="cp-field">
+              <label>Modelo Whisper</label>
+              <select id="cp-whisper-model">
+                <option value="Xenova/whisper-tiny">Tiny (~600 MB, m&aacute;s r&aacute;pido)</option>
+                <option value="Xenova/whisper-base">Base (~800 MB, recomendado)</option>
+                <option value="Xenova/whisper-small">Small (~1.4 GB, m&aacute;s preciso)</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label>Idioma de transcripci&oacute;n</label>
+              <select id="cp-whisper-lang">
+                <option value="es">Espa&ntilde;ol (es)</option>
+                <option value="en">English (en)</option>
+                <option value="fr">Fran&ccedil;ais (fr)</option>
+                <option value="de">Deutsch (de)</option>
+                <option value="it">Italiano (it)</option>
+                <option value="pt">Portugu&ecirc;s (pt)</option>
+                <option value="ja">日本語 (ja)</option>
+                <option value="zh">中文 (zh)</option>
+                <option value="ko">한국어 (ko)</option>
+                <option value="ru">Русский (ru)</option>
+                <option value="ar">العربية (ar)</option>
+                <option value="hi">हिन्दी (hi)</option>
+                <option value="nl">Nederlands (nl)</option>
+                <option value="pl">Polski (pl)</option>
+                <option value="tr">T&uuml;rk&ccedil;e (tr)</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label>Idioma de audio</label>
+              <select id="cp-audio-lang">
+                <option value="es-AR">Espa&ntilde;ol Argentina (es-AR)</option>
+                <option value="es-ES">Espa&ntilde;ol Espa&ntilde;a (es-ES)</option>
+                <option value="es-MX">Espa&ntilde;ol M&eacute;xico (es-MX)</option>
+                <option value="en-US">English US (en-US)</option>
+                <option value="en-GB">English UK (en-GB)</option>
+                <option value="fr-FR">Fran&ccedil;ais (fr-FR)</option>
+                <option value="de-DE">Deutsch (de-DE)</option>
+                <option value="it-IT">Italiano (it-IT)</option>
+                <option value="pt-BR">Portugu&ecirc;s Brasil (pt-BR)</option>
+                <option value="ja-JP">日本語 (ja-JP)</option>
+                <option value="zh-CN">中文 (zh-CN)</option>
+                <option value="ko-KR">한국어 (ko-KR)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128172;</span> Burbuja de texto</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-bubble-enabled">
+              <label class="cp-switch" for="cp-bubble-enabled"></label>
+              <span class="cp-toggle-label">Mostrar burbuja de texto
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Muestra las respuestas del server sobre el personaje</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128264;</span> Salida (TTS)</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-tts-enabled">
+              <label class="cp-switch" for="cp-tts-enabled"></label>
+              <span class="cp-toggle-label">Leer respuestas en voz alta</span>
+            </div>
+            <div class="cp-field">
+              <label>Modo TTS</label>
+              <select id="cp-tts-provider">
+                <option value="browser">Voces del sistema (local)</option>
+                <option value="server">Desde el servidor (Edge TTS / Piper)</option>
+              </select>
+            </div>
+            <div class="cp-field">
+              <label>Voz (solo modo local)
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Las voces marcadas con ★ son "Online" (m&aacute;s naturales en Windows 11)</span></span>
+              </label>
+              <select id="cp-tts-voice">
+                <!-- Se llena dinámicamente -->
+              </select>
+            </div>
+            <div class="cp-field">
+              <label>Velocidad <span id="cp-tts-rate-val" style="color:#5b8;float:right;">1</span></label>
+              <input type="range" id="cp-tts-rate" min="0.5" max="2" step="0.1" value="1" class="cp-range">
+            </div>
+            <div class="cp-field">
+              <label>Tono <span id="cp-tts-pitch-val" style="color:#5b8;float:right;">1</span></label>
+              <input type="range" id="cp-tts-pitch" min="0.5" max="2" step="0.1" value="1" class="cp-range">
+            </div>
+            <div class="cp-field">
+              <label>Volumen <span id="cp-tts-volume-val" style="color:#5b8;float:right;">1</span></label>
+              <input type="range" id="cp-tts-volume" min="0" max="1" step="0.1" value="1" class="cp-range">
+            </div>
+            <div style="margin-top:8px;">
+              <button class="cp-btn" id="cp-tts-preview">Probar voz</button>
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+        <!-- Página: Física -->
+        <div class="cp-page" id="page-fisica">
+          <div class="cp-page-title">F&iacute;sica</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#9881;</span> Par&aacute;metros de f&iacute;sica</div>
+            <div class="cp-field">
+              <label>Gravedad (px/s&sup2;)</label>
+              <input type="number" id="cp-physics-gravity" placeholder="1200" min="0" step="50">
+            </div>
+            <div class="cp-field">
+              <label>Velocidad de caminata (px/s)</label>
+              <input type="number" id="cp-physics-walk-speed" placeholder="70" min="0" step="5">
+            </div>
+            <div class="cp-field">
+              <label>Factor de rebote (0-1)</label>
+              <input type="number" id="cp-physics-bounce-factor" placeholder="0.25" min="0" max="1" step="0.05">
+            </div>
+            <div class="cp-field">
+              <label>Umbral de rebote (px/s m&iacute;nimo para rebotar)</label>
+              <input type="number" id="cp-physics-bounce-threshold" placeholder="150" min="0" step="10">
+            </div>
+            <div class="cp-field">
+              <label>Velocidad terminal (px/s m&aacute;x de ca&iacute;da)</label>
+              <input type="number" id="cp-physics-terminal-velocity" placeholder="900" min="0" step="50">
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="fisica">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Comportamiento -->
+        <div class="cp-page" id="page-comportamiento">
+          <div class="cp-page-title">Comportamiento</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128433;</span> Cursor</div>
+            <div class="cp-field">
+              <label>Sensibilidad al cursor (px)
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Distancia m&iacute;nima del cursor para que el critter reaccione</span></span>
+              </label>
+              <input type="number" id="cp-behavior-cursor-threshold" placeholder="20" min="0" step="5">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#9202;</span> Duraciones por estado (ms)</div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Idle m&iacute;n</label>
+                <input type="number" id="cp-behavior-idle-min" placeholder="2000" min="0" step="100">
+              </div>
+              <div class="cp-field">
+                <label>Idle m&aacute;x</label>
+                <input type="number" id="cp-behavior-idle-max" placeholder="5000" min="0" step="100">
+              </div>
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Blink m&iacute;n</label>
+                <input type="number" id="cp-behavior-blink-min" placeholder="400" min="0" step="50">
+              </div>
+              <div class="cp-field">
+                <label>Blink m&aacute;x</label>
+                <input type="number" id="cp-behavior-blink-max" placeholder="600" min="0" step="50">
+              </div>
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Look m&iacute;n</label>
+                <input type="number" id="cp-behavior-look-min" placeholder="1000" min="0" step="100">
+              </div>
+              <div class="cp-field">
+                <label>Look m&aacute;x</label>
+                <input type="number" id="cp-behavior-look-max" placeholder="2500" min="0" step="100">
+              </div>
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Walk m&iacute;n</label>
+                <input type="number" id="cp-behavior-walk-min" placeholder="2000" min="0" step="100">
+              </div>
+              <div class="cp-field">
+                <label>Walk m&aacute;x</label>
+                <input type="number" id="cp-behavior-walk-max" placeholder="5000" min="0" step="100">
+              </div>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#9878;</span> Pesos de transici&oacute;n
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Mayor peso = m&aacute;s frecuente. 0 = nunca ocurre.</span></span>
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Blink</label>
+                <input type="number" id="cp-behavior-weight-blink" placeholder="4" min="0" step="1">
+              </div>
+              <div class="cp-field">
+                <label>Look</label>
+                <input type="number" id="cp-behavior-weight-look" placeholder="2" min="0" step="1">
+              </div>
+              <div class="cp-field">
+                <label>Walk</label>
+                <input type="number" id="cp-behavior-weight-walk" placeholder="1" min="0" step="1">
+              </div>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#127910;</span> Frame rates (ms por frame)</div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Idle</label>
+                <input type="number" id="cp-behavior-fps-idle" placeholder="300" min="0" step="25">
+              </div>
+              <div class="cp-field">
+                <label>Blink</label>
+                <input type="number" id="cp-behavior-fps-blink" placeholder="150" min="0" step="25">
+              </div>
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Look</label>
+                <input type="number" id="cp-behavior-fps-look" placeholder="250" min="0" step="25">
+              </div>
+              <div class="cp-field">
+                <label>Drag</label>
+                <input type="number" id="cp-behavior-fps-drag" placeholder="200" min="0" step="25">
+              </div>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128522;</span> Emociones
+              <span class="cp-info">&#8505;<span class="cp-tooltip">El critter cambia de expresi&oacute;n seg&uacute;n lo que pasa: piensa mientras espera respuesta, se pone contento al recibir una, se pone triste si pierde conexi&oacute;n.</span></span>
+            </div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-emotions-enabled">
+              <label class="cp-switch" for="cp-emotions-enabled"></label>
+              <span class="cp-toggle-label">Habilitar emociones</span>
+            </div>
+            <div class="cp-field">
+              <label>Duraci&oacute;n de emoci&oacute;n feliz (ms)</label>
+              <input type="number" id="cp-emotion-happy-ms" placeholder="2000" min="0" step="100">
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="comportamiento">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Apariencia -->
+        <div class="cp-page" id="page-apariencia">
+          <div class="cp-page-title">Apariencia</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128204;</span> Visuales</div>
+            <div class="cp-field">
+              <label>Escala del sprite (multiplicador)</label>
+              <input type="number" id="cp-sprite-scale" placeholder="3" min="1" max="10" step="0.5">
+            </div>
+            <div class="cp-field">
+              <label>Tiempo burbuja visible (ms)</label>
+              <input type="number" id="cp-bubble-dismiss-ms" placeholder="12000" min="0" step="1000">
+            </div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Ancho del chat (px)</label>
+                <input type="number" id="cp-chat-width" placeholder="320" min="100" step="10">
+              </div>
+              <div class="cp-field">
+                <label>Alto del chat (px)</label>
+                <input type="number" id="cp-chat-height" placeholder="450" min="100" step="10">
+              </div>
+            </div>
+            <div class="cp-field">
+              <label>Delay hover botones (ms)</label>
+              <input type="number" id="cp-hover-delay-ms" placeholder="300" min="0" step="50">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128196;</span> Historial de chat
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Las conversaciones se guardan localmente en SQLite. Pod&eacute;s buscar y revisar conversaciones anteriores desde el panel de chat.</span></span>
+            </div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-chat-history-enabled">
+              <label class="cp-switch" for="cp-chat-history-enabled"></label>
+              <span class="cp-toggle-label">Guardar historial de conversaciones</span>
+            </div>
+            <div class="cp-field">
+              <label>M&aacute;ximo de mensajes guardados (0 = sin l&iacute;mite)</label>
+              <input type="number" id="cp-chat-history-max" placeholder="0" min="0" step="10">
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="apariencia">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Atajos -->
+        <div class="cp-page" id="page-atajos">
+          <div class="cp-page-title">Atajos globales</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#9000;</span> Combinaciones de teclas
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Todos los atajos usan Ctrl+Shift+Letra. Ingres&aacute; una sola letra (A-Z). Los cambios se aplican al guardar.</span></span>
+            </div>
+
+            <div class="cp-field">
+              <label>Chat toggle / Push-to-talk</label>
+              <div class="cp-row" style="align-items:center;gap:8px;">
+                <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+                <input type="text" id="cp-hotkey-chat" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+                <span style="color:#666;font-size:10px;">Tap = chat, mantener = push-to-talk</span>
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label>Ocultar / Mostrar critter</label>
+              <div class="cp-row" style="align-items:center;gap:8px;">
+                <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+                <input type="text" id="cp-hotkey-visibility" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label>Abrir configuraci&oacute;n</label>
+              <div class="cp-row" style="align-items:center;gap:8px;">
+                <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+                <input type="text" id="cp-hotkey-config" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label>Toggle modo debug</label>
+              <div class="cp-row" style="align-items:center;gap:8px;">
+                <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+                <input type="text" id="cp-hotkey-debug" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+              </div>
+            </div>
+
+            <div class="cp-field">
+              <label>Reconectar al server</label>
+              <div class="cp-row" style="align-items:center;gap:8px;">
+                <span style="color:#888;font-size:12px;white-space:nowrap;">Ctrl+Shift+</span>
+                <input type="text" id="cp-hotkey-reconnect" maxlength="1" style="width:50px;text-transform:uppercase;text-align:center;">
+              </div>
+            </div>
+
+            <div class="cp-sprite-error" id="cp-hotkey-error"></div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="atajos">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Avanzado -->
+        <div class="cp-page" id="page-avanzado">
+          <div class="cp-page-title">Avanzado</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#129504;</span> Whisper</div>
+            <div class="cp-field">
+              <label>Idle timeout &mdash; descargar modelo de RAM (ms)
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Tiempo sin uso antes de liberar el modelo Whisper de la RAM</span></span>
+              </label>
+              <input type="number" id="cp-whisper-idle-ms" placeholder="60000" min="0" step="5000">
+            </div>
+            <div class="cp-field">
+              <label>L&iacute;mite RAM para Whisper (MB)</label>
+              <input type="number" id="cp-whisper-max-ram-mb" placeholder="2048" min="512" step="256">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128260;</span> Reconexi&oacute;n</div>
+            <div class="cp-row">
+              <div class="cp-field">
+                <label>Delay base (ms)</label>
+                <input type="number" id="cp-reconnect-base-ms" placeholder="1000" min="0" step="500">
+              </div>
+              <div class="cp-field">
+                <label>Delay m&aacute;ximo (ms)</label>
+                <input type="number" id="cp-reconnect-max-ms" placeholder="30000" min="0" step="1000">
+              </div>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128433;</span> Interacci&oacute;n</div>
+            <div class="cp-field">
+              <label>Umbral push-to-talk (ms)
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Mantener la tecla m&aacute;s de este tiempo activa push-to-talk; menos = toggle chat</span></span>
+              </label>
+              <input type="number" id="cp-hold-to-talk-ms" placeholder="400" min="0" step="50">
+            </div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-context-menu-enabled">
+              <label class="cp-switch" for="cp-context-menu-enabled"></label>
+              <span class="cp-toggle-label">Habilitar men&uacute; de click derecho
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Click derecho sobre el critter muestra un men&uacute; r&aacute;pido con acciones comunes (chat, configuraci&oacute;n, reconectar, ocultar).</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128276;</span> Notificaciones</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-notifications-enabled">
+              <label class="cp-switch" for="cp-notifications-enabled"></label>
+              <span class="cp-toggle-label">Notificaciones del sistema
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Muestra una notificaci&oacute;n del sistema operativo cuando el critter recibe una respuesta y la ventana no tiene foco.</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128259;</span> Actualizaciones</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-auto-update-enabled">
+              <label class="cp-switch" for="cp-auto-update-enabled"></label>
+              <span class="cp-toggle-label">Buscar actualizaciones al iniciar
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Consulta GitHub al abrir la app si hay una versi&oacute;n nueva disponible. Si la hay, el critter muestra una burbuja con la opci&oacute;n de actualizar.</span></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="avanzado">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: Sonidos -->
+        <div class="cp-page" id="page-sonidos">
+          <div class="cp-page-title">Efectos de sonido</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128266;</span> General</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-sfx-enabled">
+              <label class="cp-switch" for="cp-sfx-enabled"></label>
+              <span class="cp-toggle-label">Habilitar efectos de sonido
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Sonidos cortos que acompa&ntilde;an las acciones del critter. Se reproducen localmente, no afectan al servidor ni al TTS.</span></span>
+              </span>
+            </div>
+
+            <div class="cp-field">
+              <label>Volumen <span id="cp-sfx-volume-val" style="color:#5b8;float:right;">0.5</span></label>
+              <input type="range" id="cp-sfx-volume" min="0" max="1" step="0.1" value="0.5" class="cp-range">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#127925;</span> Eventos con sonido</div>
+            <div class="cp-toggle"><input type="checkbox" id="cp-sfx-chat"><label class="cp-switch" for="cp-sfx-chat"></label><span class="cp-toggle-label">Abrir/cerrar chat</span></div>
+            <div class="cp-toggle"><input type="checkbox" id="cp-sfx-message"><label class="cp-switch" for="cp-sfx-message"></label><span class="cp-toggle-label">Mensaje recibido</span></div>
+            <div class="cp-toggle"><input type="checkbox" id="cp-sfx-mic"><label class="cp-switch" for="cp-sfx-mic"></label><span class="cp-toggle-label">Inicio de grabaci&oacute;n</span></div>
+            <div class="cp-toggle"><input type="checkbox" id="cp-sfx-connect"><label class="cp-switch" for="cp-sfx-connect"></label><span class="cp-toggle-label">Conexi&oacute;n establecida</span></div>
+            <div class="cp-toggle"><input type="checkbox" id="cp-sfx-error"><label class="cp-switch" for="cp-sfx-error"></label><span class="cp-toggle-label">Error</span></div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+            <button class="cp-btn cp-reset-section" data-section="sonidos">Restaurar defaults</button>
+          </div>
+        </div>
+
+        <!-- Página: API -->
+        <div class="cp-page" id="page-api">
+          <div class="cp-page-title">API HTTP local</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128268;</span> Configuraci&oacute;n
+              <span class="cp-info">&#8505;<span class="cp-tooltip">Permite que otros programas de tu PC se comuniquen con el critter mediante peticiones HTTP.</span></span>
+            </div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-local-api-enabled">
+              <label class="cp-switch" for="cp-local-api-enabled"></label>
+              <span class="cp-toggle-label">Habilitar API local
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Requiere reiniciar la app para aplicar cambios</span></span>
+              </span>
+            </div>
+            <div class="cp-field">
+              <label>Puerto</label>
+              <input type="number" id="cp-local-api-port" placeholder="17842" min="1024" max="65535" step="1">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128203;</span> Endpoints disponibles</div>
+            <div class="cp-sprite-info">
+              <ul>
+                <li><b>POST /message</b> &mdash; env&iacute;a texto al critter: { "text": "hola" }</li>
+                <li><b>GET /status</b> &mdash; estado de conexi&oacute;n, versi&oacute;n</li>
+                <li><b>POST /action</b> &mdash; ejecuta una acci&oacute;n: { "action": "wave" }</li>
+                <li><b>POST /webhook</b> &mdash; trigger externo: { "event": "notify", "data": {"text": "..."} }</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+        <!-- Página: Plugins -->
+        <div class="cp-page" id="page-plugins">
+          <div class="cp-page-title">Plugins</div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#129520;</span> Sistema de plugins</div>
+            <div class="cp-toggle">
+              <input type="checkbox" id="cp-plugins-enabled">
+              <label class="cp-switch" for="cp-plugins-enabled"></label>
+              <span class="cp-toggle-label">Habilitar sistema de plugins
+                <span class="cp-info">&#8505;<span class="cp-tooltip">Los plugins agregan comportamientos, animaciones y herramientas al critter sin modificar el c&oacute;digo principal.</span></span>
+              </span>
+            </div>
+            <div class="cp-field">
+              <label>Carpeta de plugins</label>
+              <input type="text" id="cp-plugins-dir" spellcheck="false" placeholder="plugins/">
+            </div>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128230;</span> Plugins instalados</div>
+            <ul class="cp-char-list" id="cp-plugin-list">
+              <li style="color:#666;font-size:11px;padding:8px;">Sin plugins instalados</li>
+            </ul>
+          </div>
+
+          <div class="cp-group">
+            <div class="cp-group-title"><span class="gicon">&#128218;</span> Crear un plugin</div>
+            <div class="cp-sprite-info">
+              <ul>
+                <li>Crear una carpeta dentro de <b>plugins/</b></li>
+                <li>Agregar <b>plugin.json</b> con name, version, description</li>
+                <li>Opcional: animations (sprite rows), states (FSM), init (script JS)</li>
+                <li>El plugin recibe acceso limitado al eventBus (emit/on) y config (get)</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="cp-page-actions">
+            <button class="cp-btn cp-save">Guardar</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <script type="module" src="js/config-panel-app.js"></script>
+</body>
+</html>

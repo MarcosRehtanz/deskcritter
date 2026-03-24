@@ -10,6 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "deskcritter",
         "width": 96,
         "height": 96,
@@ -18,12 +19,13 @@
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
+        "skipTaskbar": true,
         "x": 600,
         "y": 400
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: http://localhost:* https://cdn.jsdelivr.net https://huggingface.co; img-src 'self' data: blob:; media-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self' data:"
     }
   },
   "bundle": {

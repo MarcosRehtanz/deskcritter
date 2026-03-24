@@ -1,4 +1,7 @@
 // Sistema de físicas: gravedad, colisión con bordes de pantalla, movimiento
+import * as config from './config.js';
+import { eventBus } from './event-bus.js';
+
 export class Physics {
   constructor(windowSize) {
     this.windowSize = windowSize;
@@ -8,43 +11,66 @@ export class Physics {
     this.vy = 0;
     this.scaleFactor = 1;
 
-    // Constantes
-    this.gravity = 1200;         // px/s²
-    this.terminalVelocity = 900; // px/s
-    this.walkSpeed = 70;         // px/s (lógicos)
+    // Constantes (se leen de config)
+    this.gravity = 1200;
+    this.terminalVelocity = 900;
+    this.walkSpeed = 70;
     this.bounceFactor = 0.25;
     this.bounceThreshold = 150;
+
+    // Aplicar config inicial y escuchar cambios
+    this.applyConfig();
+    eventBus.on('config:updated', () => this.applyConfig());
 
     // Límites de pantalla (se inicializan en initScreenBounds)
     this.screenWidth = 1920;
     this.screenHeight = 1080;
+    this.monitorX = 0;
+    this.monitorY = 0;
+    this.leftBound = 0;
+    this.rightBound = 1920;
     this.groundY = this.screenHeight - this.windowSize;
 
     this.grounded = false;
   }
 
-  // Detectar dimensiones reales de la pantalla vía Tauri
-  async initScreenBounds() {
-    try {
-      const win = window.__TAURI__.window.getCurrentWindow();
-      const pos = await win.outerPosition();
-      this.x = pos.x;
-      this.y = pos.y;
+  // Re-lee las constantes de física desde config
+  applyConfig() {
+    this.gravity = config.get('physicsGravity') ?? 1200;
+    this.terminalVelocity = config.get('physicsTerminalVelocity') ?? 900;
+    this.walkSpeed = config.get('physicsWalkSpeed') ?? 70;
+    this.bounceFactor = config.get('physicsBounceFactor') ?? 0.25;
+    this.bounceThreshold = config.get('physicsBounceThreshold') ?? 150;
+  }
 
-      const monitor = await win.currentMonitor();
-      if (monitor) {
-        this.scaleFactor = monitor.scaleFactor;
-        this.screenWidth = monitor.size.width;
-        this.screenHeight = monitor.size.height;
-        // Tamaño físico de la ventana (lógico * scale)
-        const physicalWindowSize = this.windowSize * this.scaleFactor;
-        this.groundY = this.screenHeight - physicalWindowSize;
-      }
-    } catch {
-      this.x = 600;
-      this.y = 400;
-      this.groundY = this.screenHeight - this.windowSize;
-    }
+  // Configurar límites de pantalla (datos provistos externamente por WindowManager)
+  setScreenBounds(screenWidth, screenHeight, scaleFactor) {
+    this.scaleFactor = scaleFactor;
+    this.screenWidth = screenWidth;
+    this.screenHeight = screenHeight;
+    const physicalWindowSize = this.windowSize * this.scaleFactor;
+    this.groundY = this.screenHeight - physicalWindowSize;
+    this.leftBound = 0;
+    this.rightBound = this.screenWidth - physicalWindowSize;
+  }
+
+  // Actualizar bounds para un monitor específico (posición absoluta)
+  setMonitorBounds(monitor) {
+    this.scaleFactor = monitor.scaleFactor;
+    this.screenWidth = monitor.width;
+    this.screenHeight = monitor.height;
+    this.monitorX = monitor.x || 0;
+    this.monitorY = monitor.y || 0;
+    const physicalWindowSize = this.windowSize * this.scaleFactor;
+    this.groundY = this.monitorY + this.screenHeight - physicalWindowSize;
+    this.leftBound = this.monitorX;
+    this.rightBound = this.monitorX + this.screenWidth - physicalWindowSize;
+  }
+
+  // Establecer posición actual (coordenadas físicas)
+  setPosition(x, y) {
+    this.x = x;
+    this.y = y;
   }
 
   // Actualizar posición cada frame (coordenadas físicas)
@@ -82,12 +108,12 @@ export class Physics {
 
     // Colisión con bordes laterales
     let hitEdge = false;
-    if (this.x <= 0) {
-      this.x = 0;
+    if (this.x <= this.leftBound) {
+      this.x = this.leftBound;
       this.vx = 0;
       hitEdge = true;
-    } else if (this.x >= this.screenWidth - this.windowSize * this.scaleFactor) {
-      this.x = this.screenWidth - this.windowSize * this.scaleFactor;
+    } else if (this.x >= this.rightBound) {
+      this.x = this.rightBound;
       this.vx = 0;
       hitEdge = true;
     }

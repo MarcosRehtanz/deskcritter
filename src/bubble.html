@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>bubble</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      overflow: hidden;
+      background: transparent;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      padding-bottom: 0;
+    }
+
+    #bubble {
+      display: inline-block;
+      cursor: grab;
+      min-width: 60px;
+      max-width: 480px;
+      max-height: 230px;
+      overflow-y: auto;
+      padding: 8px 12px;
+      background: #fff;
+      border-radius: 12px;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #222;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    #bubble::-webkit-scrollbar { width: 4px; }
+    #bubble::-webkit-scrollbar-thumb { background: #bbb; border-radius: 2px; }
+
+    #bubble.visible {
+      opacity: 1;
+    }
+
+    /* Botón cerrar */
+    .bubble-close {
+      position: absolute;
+      top: 2px;
+      right: 6px;
+      background: none;
+      border: none;
+      color: #999;
+      font-size: 14px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .bubble-close:hover { color: #333; }
+
+    /* Botones inline */
+    .bubble-buttons {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bubble-btn-row {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .bubble-btn {
+      padding: 4px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #f5f5f5;
+      color: #333;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+    }
+    .bubble-btn:hover { background: #e0e0e0; }
+    .bubble-btn:disabled { opacity: 0.5; cursor: default; }
+    .bubble-btn.selected { background: #4caf50; color: #fff; border-color: #4caf50; }
+  </style>
+</head>
+<body>
+  <div id="bubble">
+    <button class="bubble-close">&times;</button>
+    <span id="bubble-text"></span>
+  </div>
+  <script>
+    const bubble = document.getElementById('bubble');
+    const textEl = document.getElementById('bubble-text');
+    const closeBtn = bubble.querySelector('.bubble-close');
+    let dismissTimer = null;
+    let dotsTimer = null;
+    const DOTS_CYCLE = ['.', '..', '...', '..', '.'];
+    const DISMISS_DELAY = 12000;
+
+    function stripAnsi(str) {
+      return str
+        .replace(/\x1B\[[0-9;?]*[A-Za-z@]/g, '')
+        .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g, '')
+        .replace(/\x1B[A-Z\\]/g, '')
+        .replace(/[\x00-\x08\x0E-\x1F\x7F]/g, '')
+        .replace(/\r/g, '')
+        .trim();
+    }
+
+    function show() {
+      bubble.classList.add('visible');
+    }
+
+    function hide() {
+      clearTimeout(dismissTimer);
+      clearInterval(dotsTimer);
+      bubble.classList.remove('visible');
+      textEl.textContent = '';
+      clearButtons();
+      // Notificar a la ventana principal
+      try { window.__TAURI__.event.emit('bubble:hidden'); } catch {}
+    }
+
+    function clearButtons() {
+      const existing = bubble.querySelector('.bubble-buttons');
+      if (existing) existing.remove();
+    }
+
+    closeBtn.addEventListener('click', hide);
+
+    // Drag para mover la ventana
+    bubble.addEventListener('mousedown', (e) => {
+      if (e.target === closeBtn || e.target.classList.contains('bubble-btn')) return;
+      try { window.__TAURI__.window.getCurrentWindow().startDragging(); } catch {}
+    });
+
+    // Auto-resize ventana al tamaño del globo (crece hacia la izquierda)
+    const PADDING = 8;
+    let lastW = 0;
+    async function resizeWindow() {
+      try {
+        const win = window.__TAURI__.window.getCurrentWindow();
+        const { LogicalSize, PhysicalPosition } = window.__TAURI__.window;
+        const newW = Math.max(Math.ceil(bubble.offsetWidth) + PADDING, 80);
+        const newH = Math.max(Math.ceil(bubble.offsetHeight) + PADDING, 40);
+
+        // Compensar en X para que el borde derecho no se mueva
+        if (lastW && newW !== lastW) {
+          const pos = await win.outerPosition();
+          const delta = newW - lastW;
+          await win.setPosition(new PhysicalPosition(pos.x - delta, pos.y));
+        }
+        lastW = newW;
+
+        await win.setSize(new LogicalSize(newW, newH));
+      } catch {}
+    }
+
+    const resizeObserver = new ResizeObserver(() => resizeWindow());
+    resizeObserver.observe(bubble);
+
+    // Escuchar eventos de la ventana principal
+    async function initListeners() {
+      const { listen } = window.__TAURI__.event;
+
+      await listen('bubble:show-text', (e) => {
+        clearInterval(dotsTimer);
+        clearTimeout(dismissTimer);
+        const clean = stripAnsi(e.payload);
+        if (!clean) return;
+        textEl.textContent = clean;
+        show();
+        bubble.scrollTop = bubble.scrollHeight;
+      });
+
+      await listen('bubble:show-dots', () => {
+        clearTimeout(dismissTimer);
+        let idx = 0;
+        textEl.textContent = DOTS_CYCLE[0];
+        show();
+        clearInterval(dotsTimer);
+        dotsTimer = setInterval(() => {
+          idx = (idx + 1) % DOTS_CYCLE.length;
+          textEl.textContent = DOTS_CYCLE[idx];
+        }, 400);
+      });
+
+      await listen('bubble:done', () => {
+        clearInterval(dotsTimer);
+        bubble.scrollTop = 0;
+        clearTimeout(dismissTimer);
+        dismissTimer = setTimeout(hide, DISMISS_DELAY);
+      });
+
+      await listen('bubble:hide', () => {
+        hide();
+      });
+
+      await listen('bubble:show-buttons', (e) => {
+        const { text, buttons } = e.payload;
+        if (text) {
+          textEl.textContent = stripAnsi(text);
+        }
+        clearButtons();
+        if (!buttons?.length) return;
+
+        const container = document.createElement('div');
+        container.className = 'bubble-buttons';
+        for (const row of buttons) {
+          const rowDiv = document.createElement('div');
+          rowDiv.className = 'bubble-btn-row';
+          for (const btn of row) {
+            const button = document.createElement('button');
+            button.className = 'bubble-btn';
+            button.textContent = btn.text;
+            button.addEventListener('click', () => {
+              container.querySelectorAll('.bubble-btn').forEach(b => b.disabled = true);
+              button.classList.add('selected');
+              window.__TAURI__.event.emit('bubble:callback-data', btn.callback_data);
+            });
+            rowDiv.appendChild(button);
+          }
+          container.appendChild(rowDiv);
+        }
+        bubble.appendChild(container);
+        show();
+        clearTimeout(dismissTimer);
+      });
+    }
+
+    initListeners();
+  </script>
+</body>
+</html>

@@ -1,150 +1,124 @@
+// Orquestador principal: init, game loop, wiring de eventos
+import { eventBus } from './event-bus.js';
 import { SpriteAnimator } from './sprite.js';
 import { StateMachine } from './state-machine.js';
 import { Physics } from './physics.js';
+import { WindowManager } from './window-manager.js';
+import { InputHandler } from './input-handler.js';
+import { setupPet, handleStateChange, reconfigurePet, PASSIVE_STATES, getCursorThreshold } from './pet-behavior.js';
+import { ServerConnection } from './server-connection.js';
+import { init as initActionHandler } from './action-handler.js';
+import { SpeechBubble, cleanForTts } from './speech-bubble.js';
+import { AudioCapture } from './audio-capture.js';
+import { predownload, preload } from './transcriber.js';
+import * as db from './db.js';
+import * as config from './config.js';
+import { ConfigPanel } from './config-panel.js';
+import { ChatPanel } from './chat.js';
+import { initDebug, dbg, toggleDebug } from './debug.js';
+import { initSfx } from './sfx.js';
+import { loadPlugins } from './plugin-loader.js';
 
 const canvas = document.getElementById('critter');
 const ctx = canvas.getContext('2d');
 
-// --- Sprite Animator (32x32, escalado x3 = 96px) ---
+// --- Módulos core ---
 const sprite = new SpriteAnimator(ctx, 32, 32, 3);
-
-sprite.addAnimation('idle', 0, 4, 300);
-sprite.addAnimation('blink', 1, 3, 150);
-sprite.addAnimation('look_left', 2, 2, 250);
-sprite.addAnimation('look_right', 3, 2, 250);
-sprite.addAnimation('drag', 4, 2, 200);
-
-// --- Máquina de estados ---
 const fsm = new StateMachine();
+const physics = new Physics(250);
+const windowManager = new WindowManager();
+const inputHandler = new InputHandler(canvas);
 
-fsm.addState('idle', {
-  animation: 'idle',
-  minDuration: 2000,
-  maxDuration: 5000,
-  transitions: [
-    { to: 'blink', weight: 4 },
-    { to: 'look_left', weight: 2 },
-    { to: 'look_right', weight: 2 },
-    { to: 'walk_left', weight: 1 },
-    { to: 'walk_right', weight: 1 }
-  ]
+// --- Módulos de comunicación ---
+// Se elige el transporte en init() según config (nodriza P2P o WebSocket directo)
+let server = null;
+const bubble = new SpeechBubble();
+const audio = new AudioCapture();
+
+// --- UI references ---
+const chatBtn = document.getElementById('chat-btn');
+const micBtn = document.getElementById('mic-btn');
+
+// --- Configurar mascota ---
+setupPet(sprite, fsm);
+
+// --- Estado del game loop ---
+let lastTime = 0;
+let lastPosX = -1;
+let lastPosY = -1;
+
+// --- Pausa cuando la ventana no es visible (ahorro CPU) ---
+let _paused = false;
+let _activeLoop = null; // 'game' o 'placeholder' — indica cuál loop reiniciar
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    _paused = true;
+    // Cancelar TTS activo para no procesar audio en background
+    window.speechSynthesis?.cancel();
+  } else {
+    _paused = false;
+    lastTime = 0; // evitar deltaTime gigante al volver
+    if (_activeLoop === 'placeholder') {
+      requestAnimationFrame(_placeholderDraw);
+    } else {
+      requestAnimationFrame(gameLoop);
+    }
+  }
 });
 
-fsm.addState('blink', {
-  animation: 'blink',
-  minDuration: 400,
-  maxDuration: 600,
-  transitions: [{ to: 'idle', weight: 10 }]
-});
+// --- Cache de monitores (evita IPC repetido en drag-end) ---
+let _monitorsCache = null;
+let _monitorsCacheTime = 0;
+async function getCachedMonitors() {
+  const now = Date.now();
+  if (_monitorsCache && now - _monitorsCacheTime < 30000) return _monitorsCache;
+  _monitorsCache = await windowManager.getAvailableMonitors();
+  _monitorsCacheTime = now;
+  return _monitorsCache;
+}
 
-fsm.addState('look_left', {
-  animation: 'look_left',
-  minDuration: 1000,
-  maxDuration: 2500,
-  transitions: [
-    { to: 'idle', weight: 6 },
-    { to: 'blink', weight: 3 },
-    { to: 'look_right', weight: 1 }
-  ]
-});
+// --- Anclaje de posición (se actualizan con drag) ---
+const BASE_W = 96;
+const BASE_H = 96;
+const BUTTONS_H = 30;
+let critterRight = 1144 + BASE_W;
+let critterBottom = 447 + BASE_H;
 
-fsm.addState('look_right', {
-  animation: 'look_right',
-  minDuration: 1000,
-  maxDuration: 2500,
-  transitions: [
-    { to: 'idle', weight: 6 },
-    { to: 'blink', weight: 3 },
-    { to: 'look_left', weight: 1 }
-  ]
-});
+// =============================================
+// Wiring: Input del usuario (drag & cursor)
+// =============================================
 
-fsm.addState('walk_left', {
-  animation: 'look_left',
-  minDuration: 2000,
-  maxDuration: 5000,
-  transitions: [
-    { to: 'idle', weight: 5 },
-    { to: 'walk_right', weight: 1 }
-  ]
-});
-
-fsm.addState('walk_right', {
-  animation: 'look_right',
-  minDuration: 2000,
-  maxDuration: 5000,
-  transitions: [
-    { to: 'idle', weight: 5 },
-    { to: 'walk_left', weight: 1 }
-  ]
-});
-
-fsm.addState('fall', {
-  animation: 'drag',
-  minDuration: 999999,
-  maxDuration: 999999,
-  transitions: []
-});
-
-fsm.addState('drag', {
-  animation: 'drag',
-  minDuration: 999999,
-  maxDuration: 999999,
-  transitions: []
-});
-
-fsm.start('idle');
-sprite.play('idle');
-
-// --- Físicas ---
-const physics = new Physics(96);
-
-// --- Drag & Drop (usa posición real de Tauri, no tracking interno) ---
-let isDragging = false;
-let dragOffsetX = 0;
-let dragOffsetY = 0;
-
-canvas.addEventListener('mousedown', (e) => {
-  isDragging = true;
-  dragOffsetX = e.screenX;
-  dragOffsetY = e.screenY;
+eventBus.on('input:dragStart', () => {
   fsm.forceState('drag');
   sprite.play('drag');
   physics.stopWalk();
 });
 
-document.addEventListener('mousemove', async (e) => {
-  if (!isDragging) return;
-
-  const deltaX = e.screenX - dragOffsetX;
-  const deltaY = e.screenY - dragOffsetY;
-  dragOffsetX = e.screenX;
-  dragOffsetY = e.screenY;
-
-  // Mover ventana usando posición real (evita drift de coordenadas)
-  try {
-    const win = window.__TAURI__.window.getCurrentWindow();
-    const pos = await win.outerPosition();
-    await win.setPosition(new window.__TAURI__.window.PhysicalPosition(
-      pos.x + deltaX, pos.y + deltaY
-    ));
-  } catch {}
+eventBus.on('input:dragMove', async ({ deltaX, deltaY }) => {
+  await windowManager.moveBy(deltaX, deltaY);
 });
 
-document.addEventListener('mouseup', async () => {
-  if (!isDragging) return;
-  isDragging = false;
-
-  // Sincronizar físicas con la posición real de la ventana
-  try {
-    const win = window.__TAURI__.window.getCurrentWindow();
-    const pos = await win.outerPosition();
-    physics.x = pos.x;
-    physics.y = pos.y;
-  } catch {}
-
-  // Si está en el aire, caer; si está en el suelo, volver a idle
+eventBus.on('input:dragEnd', async () => {
+  const pos = await windowManager.getPosition();
+  // Actualizar anclaje para que autoResize no salte a la posición vieja
+  critterRight = pos.x + BASE_W;
+  critterBottom = pos.y + BASE_H;
+  chatPanel?.updateAnchor(critterRight, critterBottom);
+  physics.setPosition(pos.x, pos.y);
   physics.release();
+
+  // Detectar monitor destino y actualizar bounds
+  const monitors = await getCachedMonitors();
+  if (monitors.length > 1) {
+    const critterCenter = pos.x + BASE_W / 2;
+    const targetMonitor = monitors.find(m =>
+      critterCenter >= m.x && critterCenter < m.x + m.width
+    );
+    if (targetMonitor) {
+      physics.setMonitorBounds(targetMonitor);
+    }
+  }
+
   if (physics.y < physics.groundY) {
     fsm.forceState('fall');
     sprite.play('drag');
@@ -156,18 +130,10 @@ document.addEventListener('mouseup', async () => {
   }
 });
 
-// --- Seguimiento del cursor ---
-document.addEventListener('mousemove', (e) => {
-  if (isDragging) return;
+eventBus.on('input:cursorMove', ({ mouseX, centerX }) => {
+  if (!PASSIVE_STATES.includes(fsm.current)) return;
+  const threshold = getCursorThreshold();
 
-  const passive = ['idle', 'blink', 'look_left', 'look_right'];
-  if (!passive.includes(fsm.current)) return;
-
-  const centerX = canvas.width / 2;
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-
-  const threshold = 20;
   if (mouseX < centerX - threshold && fsm.current !== 'look_left' && fsm.current !== 'blink') {
     fsm.forceState('look_left');
     sprite.play('look_left');
@@ -177,122 +143,405 @@ document.addEventListener('mousemove', (e) => {
   }
 });
 
-// --- Mover ventana Tauri ---
-function moveWindow(x, y) {
+// =============================================
+// Wiring: Menú contextual
+// =============================================
+
+const ctxMenu = document.getElementById('context-menu');
+
+eventBus.on('input:contextMenu', ({ x, y }) => {
+  if (config.get('contextMenuEnabled') === false) return;
+  if (!ctxMenu) return;
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top = y + 'px';
+  ctxMenu.classList.add('visible');
+});
+
+// Cerrar menú al hacer click fuera o presionar Escape
+document.addEventListener('click', () => {
+  ctxMenu?.classList.remove('visible');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') ctxMenu?.classList.remove('visible');
+});
+
+// Acciones del menú contextual
+ctxMenu?.addEventListener('click', (e) => {
+  const item = e.target.closest('.ctx-item');
+  if (!item) return;
+  ctxMenu.classList.remove('visible');
+  const action = item.dataset.action;
+  switch (action) {
+    case 'chat':
+      chatPanel?.toggle();
+      break;
+    case 'mic':
+      micToggle();
+      break;
+    case 'config':
+      configPanel.toggle();
+      break;
+    case 'reconnect':
+      server?.disconnect();
+      server?.connect();
+      bubble.show('Reconectando...');
+      bubble.done();
+      break;
+    case 'hide':
+      windowManager.toggleVisibility();
+      break;
+  }
+});
+
+// =============================================
+// Wiring: Server (WebSocket a terminal-live)
+// =============================================
+
+
+// Chunk de streaming → mostrar en burbuja (solo si chat cerrado)
+eventBus.on('server:chunk', ({ accumulated }) => {
+  if (!chatPanel?.open) {
+    bubble.show(accumulated);
+  }
+});
+
+// Respuesta completa → iniciar timer de dismiss (solo si chat cerrado)
+eventBus.on('server:done', () => {
+  if (!chatPanel?.open) {
+    bubble.done();
+  }
+});
+
+// Botones inline → mostrar en burbuja (siempre, para interacción rápida)
+eventBus.on('server:buttons', ({ text, buttons }) => {
+  if (!chatPanel?.open) {
+    if (text) bubble.show(text);
+    bubble.showButtons(buttons);
+  }
+});
+
+// Audio remoto → enviar PCM al server para transcripción
+eventBus.on('audio:remote', ({ base64, format }) => {
+  if (server?.sendAudio) {
+    server.sendAudio(base64, format);
+  }
+});
+
+// TTS — leer respuesta en voz alta (browser speech)
+eventBus.on('server:done', ({ text }) => {
+  if (document.hidden) return; // no procesar TTS si la ventana está oculta
+  if (config.get('ttsEnabled') && config.get('ttsProvider') === 'browser' && text?.trim()) {
+    try {
+      const utter = new SpeechSynthesisUtterance(cleanForTts(text));
+      const voiceName = config.get('ttsVoice');
+      if (voiceName && window.speechSynthesis) {
+        const voice = window.speechSynthesis.getVoices().find(v => v.name === voiceName);
+        if (voice) utter.voice = voice;
+      }
+      utter.lang = config.get('audioLang') || 'es-AR';
+      utter.rate = config.get('ttsRate') ?? 1;
+      utter.pitch = config.get('ttsPitch') ?? 1;
+      utter.volume = config.get('ttsVolume') ?? 1;
+      window.speechSynthesis?.speak(utter);
+    } catch (e) { dbg('main', 'TTS error', e); }
+  }
+});
+
+// Notificación del sistema cuando llega respuesta y la ventana no tiene foco
+eventBus.on('server:done', ({ text }) => {
+  if (config.get('notificationsEnabled') !== true) return;
+  if (document.hasFocus()) return;
   try {
-    const win = window.__TAURI__.window.getCurrentWindow();
-    win.setPosition(new window.__TAURI__.window.PhysicalPosition(
-      Math.round(x), Math.round(y)
-    ));
-  } catch {}
-}
-
-// --- Manejo de cambio de estado ---
-function handleStateChange(newState) {
-  const config = fsm.states[newState];
-  if (config) sprite.play(config.animation);
-
-  if (newState === 'walk_left') {
-    if (physics.grounded) {
-      physics.startWalk(-1);
-    } else {
-      fsm.forceState('idle');
-      sprite.play('idle');
-      return;
+    if (Notification.permission === 'granted') {
+      new Notification('DeskCritter', {
+        body: text?.substring(0, 100) || 'Nueva respuesta',
+        silent: true,
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission();
     }
-  } else if (newState === 'walk_right') {
-    if (physics.grounded) {
-      physics.startWalk(1);
-    } else {
-      fsm.forceState('idle');
-      sprite.play('idle');
-      return;
+  } catch (e) { dbg('main', 'notification error', e); }
+});
+
+// =============================================
+// Mensajes proactivos (push) del server
+// =============================================
+
+eventBus.on('server:push', ({ text }) => {
+  if (!text?.trim()) return;
+
+  // Burbuja — siempre, sin importar si el chat está abierto
+  bubble.show(text);
+  bubble.done();
+
+  // TTS — leer el texto (sin importar si la ventana está oculta)
+  if (config.get('ttsEnabled') && config.get('ttsProvider') === 'browser') {
+    try {
+      const utter = new SpeechSynthesisUtterance(cleanForTts(text));
+      const voiceName = config.get('ttsVoice');
+      if (voiceName && window.speechSynthesis) {
+        const voice = window.speechSynthesis.getVoices().find(v => v.name === voiceName);
+        if (voice) utter.voice = voice;
+      }
+      utter.lang = config.get('audioLang') || 'es-AR';
+      utter.rate = config.get('ttsRate') ?? 1;
+      utter.pitch = config.get('ttsPitch') ?? 1;
+      utter.volume = config.get('ttsVolume') ?? 1;
+      window.speechSynthesis?.speak(utter);
+    } catch (e) { dbg('main', 'push TTS error', e); }
+  }
+
+  // Notificación del SO — siempre (no solo cuando no tiene foco)
+  try {
+    if (Notification.permission === 'granted') {
+      new Notification('DeskCritter', {
+        body: text.substring(0, 100),
+        silent: true,
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission();
     }
+  } catch (e) { dbg('main', 'push notification error', e); }
+
+  // Emoción
+  if (config.get('emotionsEnabled')) {
+    fsm.forceState('celebrating');
+    sprite.play('celebrate');
+  }
+});
+
+// TTS — reproducir audio del server (Edge TTS / Piper)
+eventBus.on('server:voice', ({ base64 }) => {
+  try {
+    const audio = new Audio('data:audio/wav;base64,' + base64);
+    audio.play();
+  } catch (e) { dbg('main', 'voice playback error', e); }
+});
+
+// =============================================
+// Wiring: Emociones (estados de ánimo reactivos)
+// =============================================
+
+eventBus.on('server:busy', (busy) => {
+  if (!config.get('emotionsEnabled')) return;
+  if (busy) {
+    fsm.forceState('thinking');
+    sprite.play('think');
+  }
+});
+
+eventBus.on('server:done', () => {
+  if (!config.get('emotionsEnabled')) return;
+  fsm.forceState('happy');
+  sprite.play('happy');
+});
+
+eventBus.on('server:connected', () => {
+  if (!config.get('emotionsEnabled')) return;
+  fsm.forceState('celebrating');
+  sprite.play('celebrate');
+});
+
+eventBus.on('server:disconnected', () => {
+  if (!config.get('emotionsEnabled')) return;
+  fsm.forceState('sad');
+  sprite.play('sad');
+});
+
+// Click en botón de burbuja → enviar callback al server
+eventBus.on('bubble:callback', (callbackData) => {
+  if (server?.sendCallback) {
+    server.sendCallback(callbackData);
+  }
+});
+
+// =============================================
+// Wiring: Indicador de conexión
+// =============================================
+
+const connBadge = document.getElementById('conn-badge');
+
+function updateConnBadge(connected, transport) {
+  if (!connBadge) return;
+  const enabled = config.get('connBadgeEnabled') !== false;
+  connBadge.style.display = enabled ? 'block' : 'none';
+  if (connected) {
+    connBadge.style.background = '#4caf50';
+    connBadge.title = `Conectado (${transport || 'WebSocket'})`;
   } else {
-    physics.stopWalk();
+    connBadge.style.background = '#f44336';
+    connBadge.title = 'Desconectado';
   }
 }
 
-// --- Game Loop ---
-let lastTime = 0;
-let lastPosX = -1;
-let lastPosY = -1;
+eventBus.on('server:connected', () => {
+  const transport = config.get('nodrizaClientId') && config.get('nodrizaApiKey') ? 'P2P' : 'WebSocket';
+  updateConnBadge(true, transport);
+});
 
-async function init() {
-  try {
-    await sprite.loadSheet('assets/critter.png');
-  } catch {
-    drawPlaceholder();
-    return;
+eventBus.on('server:disconnected', () => {
+  updateConnBadge(false);
+});
+
+// =============================================
+// Wiring: Audio (STT → enviar al server)
+// =============================================
+
+eventBus.on('audio:result', ({ text }) => {
+  if (server?.connected && !server?.busy) {
+    server?.send(text);
   }
+});
 
-  // Ajustar ventana al tamaño real del sprite
-  try {
-    const win = window.__TAURI__.window.getCurrentWindow();
-    await win.setSize(new window.__TAURI__.window.LogicalSize(96, 96));
-  } catch (e) {
-    console.error('Error al redimensionar ventana:', e);
-  }
+eventBus.on('audio:started', () => {
+  micBtn.classList.add('listening');
+});
 
-  await physics.initScreenBounds();
+eventBus.on('audio:stopped', () => {
+  micBtn.classList.remove('listening');
+});
 
-  // Gravedad inicial: el monigote cae desde su posición de inicio
-  if (physics.y < physics.groundY) {
-    physics.grounded = false;
-    fsm.forceState('fall');
-    sprite.play('drag');
+eventBus.on('audio:transcribing', () => {
+  micBtn.classList.add('transcribing');
+  if (!chatPanel?.open) bubble.showDots();
+});
+
+eventBus.on('audio:result', ({ text }) => {
+  micBtn.classList.remove('transcribing');
+});
+
+eventBus.on('audio:error', () => {
+  micBtn.classList.remove('transcribing');
+  bubble.hide();
+});
+
+// =============================================
+// Wiring: Transcriber (Whisper local)
+// =============================================
+
+// Transcriber: sin mensajes en burbuja, solo log
+eventBus.on('transcriber:error', ({ error }) => {
+  dbg('transcriber', 'error', error);
+});
+
+// --- Control de micrófono ---
+// Botón click y tecla M (tap) = toggle on/off
+// Mantener M = push-to-talk (graba mientras se mantiene, transcribe al soltar)
+
+let micToggleOn = false;  // estado toggle (modo abierto)
+let micHolding = false;   // estado push-to-talk
+
+function micToggle() {
+  dbg('mic', 'toggle()', { supported: audio.supported, holding: micHolding, toggleOn: micToggleOn, listening: audio.listening });
+  if (!audio.supported) return;
+  if (micHolding) return; // no mezclar hold con toggle
+
+  if (micToggleOn || audio.listening) {
+    dbg('mic', 'toggle → OFF');
+    audio.stop();
+    micToggleOn = false;
   } else {
-    physics.grounded = true;
+    dbg('mic', 'toggle → ON');
+    audio.start();
+    micToggleOn = true;
   }
-
-  requestAnimationFrame(gameLoop);
 }
+
+micBtn.addEventListener('click', micToggle);
+
+// Tap corto en Shift+M → toggle chat
+eventBus.on('input:chatToggle', () => chatPanel?.toggle());
+
+// Mantener Shift+M → push-to-talk (solo si el mic no está en modo toggle)
+eventBus.on('input:micHoldStart', () => {
+  dbg('mic', 'holdStart', { supported: audio.supported, toggleOn: micToggleOn, listening: audio.listening });
+  if (!audio.supported) return;
+  if (micToggleOn || audio.listening) return; // ya está grabando por toggle
+  micHolding = true;
+  dbg('mic', 'push-to-talk → ON');
+  audio.start();
+});
+
+eventBus.on('input:micHoldEnd', () => {
+  dbg('mic', 'holdEnd', { holding: micHolding });
+  if (!micHolding) return;
+  micHolding = false;
+  audio.stop();
+});
+
+// --- Chat integrado ---
+let chatPanel = null; // se inicializa en init() después de windowManager
+
+// --- Panel de configuración (solo desde tray) ---
+const configPanel = new ConfigPanel();
+
+// Reconectar server desde el panel
+eventBus.on('config:reconnect', () => {
+  server?.disconnect();
+  server?.connect();
+});
+
+// Config actualizada desde el panel → re-aplicar comportamiento y escala
+eventBus.on('config:updated', (partial) => {
+  reconfigurePet(sprite, fsm);
+  // Cambio de escala del sprite
+  const newScale = config.get('spriteScale');
+  if (newScale && sprite.scale !== newScale) {
+    sprite.setScale(newScale);
+  }
+});
+
+// =============================================
+// Game Loop
+// =============================================
 
 function gameLoop(timestamp) {
+  if (_paused) return; // no consumir CPU si la ventana está oculta
   const deltaTime = lastTime ? timestamp - lastTime : 16;
   lastTime = timestamp;
 
-  // Actualizar estado
   const newState = fsm.update(deltaTime);
   if (newState) {
-    handleStateChange(newState);
+    handleStateChange(newState, { fsm, sprite, physics });
   }
 
-  // Actualizar física (solo si no está en drag)
-  if (!isDragging) {
+  if (!inputHandler.isDragging) {
     const pos = physics.update(deltaTime);
 
-    // Si aterrizó mientras caía
     if (pos.grounded && fsm.current === 'fall') {
       fsm.forceState('idle');
       sprite.play('idle');
     }
 
-    // Si llegó a un borde caminando, detenerse
     if (pos.hitEdge && (fsm.current === 'walk_left' || fsm.current === 'walk_right')) {
       fsm.forceState('idle');
       sprite.play('idle');
     }
 
-    // Mover ventana si la posición cambió
-    if (pos.x !== lastPosX || pos.y !== lastPosY) {
-      lastPosX = pos.x;
-      lastPosY = pos.y;
-      moveWindow(pos.x, pos.y);
-    }
+    // DEBUG: desactivar movimiento de ventana para diagnosticar
+    // if (pos.x !== lastPosX || pos.y !== lastPosY) {
+    //   lastPosX = pos.x;
+    //   lastPosY = pos.y;
+    //   windowManager.setPosition(pos.x, pos.y);
+    // }
   }
 
-  // Actualizar y dibujar sprite
   sprite.update(deltaTime);
   sprite.draw();
 
   requestAnimationFrame(gameLoop);
 }
 
-// Placeholder mientras no hay sprite sheet real
+// =============================================
+// Placeholder (sin sprite sheet)
+// =============================================
+
+let _placeholderDraw = null;
 function drawPlaceholder() {
   const size = 96;
-  function draw(timestamp) {
+  _activeLoop = 'placeholder';
+  _placeholderDraw = function draw(timestamp) {
+    if (_paused) return; // no consumir CPU si la ventana está oculta
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     ctx.fillStyle = '#5b8c5a';
@@ -326,8 +575,336 @@ function drawPlaceholder() {
     ctx.stroke();
 
     requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(_placeholderDraw);
+}
+
+// =============================================
+// Inicialización
+// =============================================
+
+async function init() {
+  // Debug primero — lee env var desde Rust
+  await initDebug();
+
+  // Inicializar DB y config antes de todo
+  dbg('main', 'init() arrancando...');
+  await config.init();
+
+  // Inicializar efectos de sonido
+  initSfx();
+
+  // Elegir transporte: nodriza P2P (si hay credenciales) o WebSocket directo
+  if (config.get('nodrizaClientId') && config.get('nodrizaApiKey')) {
+    const { NodrizaClient } = await import('./nodriza-client.js');
+    server = new NodrizaClient();
+    dbg('main', 'transporte: nodriza P2P');
+  } else {
+    server = new ServerConnection();
+    dbg('main', 'transporte: WebSocket directo');
   }
-  requestAnimationFrame(draw);
+
+  // Cargar sprite: primero personaje activo de DB, luego config legacy, luego default
+  let spriteSource = '';
+  const activeChar = await db.getActiveCharacter();
+  if (activeChar) {
+    spriteSource = activeChar.sprite;
+    dbg('main', 'personaje activo:', activeChar.name);
+  } else {
+    spriteSource = config.get('spriteSheet');
+    dbg('main', 'sin personaje activo, usando config/default');
+  }
+  try {
+    await sprite.loadSheet(spriteSource || 'assets/critter.png');
+    dbg('main', 'sprite cargado');
+  } catch (err) {
+    dbg('main', 'sprite falló, usando placeholder', err);
+    drawPlaceholder();
+    return;
+  }
+
+  // Escuchar cambio de sprite desde el panel de configuración
+  try {
+    const { listen } = window.__TAURI__.event;
+    listen('config:sprite-changed', async (event) => {
+      const src = event.payload?.spriteSheet || 'assets/critter.png';
+      dbg('main', 'sprite cambiado desde config panel');
+      try {
+        await sprite.reloadSheet(src);
+      } catch (e) {
+        dbg('main', 'error recargando sprite, usando default', e);
+        await sprite.reloadSheet('assets/critter.png');
+      }
+    });
+  } catch (e) { dbg('main', 'sprite listener error', e); }
+
+  await windowManager.init();
+
+  await windowManager.setSize(BASE_W, BASE_H);
+  await windowManager.setPosition(critterRight - BASE_W, critterBottom - BASE_H);
+
+  // Hover: la ventana crece hacia abajo para mostrar botones (con delay)
+  let hovered = false;
+  let hoverTimer = null;
+  const critterArea = document.getElementById('critter-area');
+  critterArea.addEventListener('mouseenter', () => {
+    clearTimeout(hoverTimer);
+    const delay = config.get('hoverDelayMs') ?? 300;
+    hoverTimer = setTimeout(() => { hovered = true; autoResize(); }, delay);
+  });
+  critterArea.addEventListener('mouseleave', () => {
+    clearTimeout(hoverTimer);
+    hovered = false;
+    autoResize();
+  });
+
+  // Auto-resize: la ventana crece arriba (burbuja) y abajo (hover botones)
+  // Se suspende cuando el chat está abierto (el chat maneja su propio layout)
+  function autoResize() {
+    if (chatPanel?.open) return;
+    const bubbleEl = document.querySelector('.speech-bubble.visible');
+    let newW = BASE_W;
+    let extraTop = 0;      // espacio extra arriba (burbuja)
+    let extraBottom = hovered ? BUTTONS_H : 0;  // espacio extra abajo (botones)
+    const btns = document.getElementById('critter-buttons');
+    if (btns) btns.classList.toggle('expanded', hovered);
+    if (bubbleEl) {
+      newW = Math.max(Math.ceil(bubbleEl.offsetWidth) + 8, BASE_W);
+      extraTop = Math.ceil(bubbleEl.offsetHeight) + 8;
+    }
+    const newH = BASE_H + extraTop + extraBottom;
+    windowManager.setSize(newW, newH);
+    // Solo compensar posición por el espacio de arriba (burbuja), no por abajo (botones)
+    windowManager.setPosition(critterRight - newW, critterBottom - BASE_H - extraTop);
+    dbg('main', 'auto-resize', { w: newW, h: newH, hovered, extraTop, extraBottom });
+  }
+  eventBus.on('bubble:show', autoResize);
+  eventBus.on('bubble:hide', autoResize);
+
+  const monitor = await windowManager.getMonitorInfo();
+  const pos = await windowManager.getPosition();
+  dbg('main', 'monitor', monitor);
+  dbg('main', 'posición inicial', pos);
+  physics.setScreenBounds(monitor.width, monitor.height, monitor.scaleFactor);
+  physics.setPosition(pos.x, pos.y);
+  dbg('main', 'physics', { groundY: physics.groundY, y: physics.y, grounded: physics.grounded });
+
+  // DEBUG: forzar grounded para que no caiga
+  physics.grounded = true;
+  physics.y = physics.groundY;
+
+  // Iniciar chat panel
+  chatPanel = new ChatPanel(windowManager, server, { right: critterRight, bottom: critterBottom });
+  chatBtn.addEventListener('click', () => chatPanel.toggle());
+  dbg('main', 'chat panel inicializado');
+
+  // Iniciar input y game loop
+  inputHandler.init();
+  dbg('main', 'input handler y game loop iniciados');
+
+  // Cargar plugins
+  await loadPlugins(sprite, fsm);
+
+  _activeLoop = 'game';
+  requestAnimationFrame(gameLoop);
+
+  // Iniciar audio (solicita permiso de micrófono)
+  await audio.init();
+  dbg('main', 'audio init', { supported: audio.supported });
+
+  // Precargar modelo Whisper en background (solo si transcripción local activa)
+  if (config.get('whisperLocal') !== false) {
+    const whisperModel = config.get('whisperModel') || 'Xenova/whisper-base';
+    dbg('main', 'precargando Whisper', whisperModel);
+    preload(whisperModel);
+  } else {
+    dbg('main', 'Whisper local desactivado — audio se enviará al server');
+  }
+
+  // --- Atajos globales configurables ---
+  // Mapeo: key → acción. Se reconstruye al cambiar config.
+  let hotkeyMap = {};
+
+  function buildHotkeyMap() {
+    hotkeyMap = {};
+    hotkeyMap[(config.get('hotkeyChat') || 'M').toUpperCase()] = 'chat';
+    hotkeyMap[(config.get('hotkeyVisibility') || 'H').toUpperCase()] = 'visibility';
+    hotkeyMap[(config.get('hotkeyConfig') || 'C').toUpperCase()] = 'config';
+    hotkeyMap[(config.get('hotkeyDebug') || 'D').toUpperCase()] = 'debug';
+    hotkeyMap[(config.get('hotkeyReconnect') || 'R').toUpperCase()] = 'reconnect';
+  }
+
+  async function registerShortcuts() {
+    buildHotkeyMap();
+    const keys = Object.keys(hotkeyMap);
+    try {
+      await window.__TAURI__.core.invoke('register_shortcuts', { keys });
+      dbg('main', 'shortcuts registrados:', keys.join(', '));
+    } catch (e) {
+      dbg('main', 'error registrando shortcuts:', e);
+    }
+  }
+
+  await registerShortcuts();
+
+  // Re-registrar cuando cambia la config de atajos
+  eventBus.on('config:updated', (partial) => {
+    if (partial.hotkeyChat || partial.hotkeyVisibility || partial.hotkeyConfig ||
+        partial.hotkeyDebug || partial.hotkeyReconnect) {
+      registerShortcuts();
+    }
+  });
+
+  try {
+    let holdTimer = null;
+    let isHolding = false;
+
+    const { listen } = window.__TAURI__.event;
+    await listen('global-shortcut', (event) => {
+      const { key, state } = event.payload;
+      const action = hotkeyMap[key];
+      if (!action) return;
+
+      // Chat: tap = toggle chat, hold = push-to-talk
+      if (action === 'chat') {
+        if (state === 'Pressed') {
+          isHolding = false;
+          const holdMs = config.get('holdToTalkMs') ?? 400;
+          holdTimer = setTimeout(() => {
+            isHolding = true;
+            eventBus.emit('input:micHoldStart');
+          }, holdMs);
+        } else if (state === 'Released') {
+          clearTimeout(holdTimer);
+          if (isHolding) {
+            eventBus.emit('input:micHoldEnd');
+            isHolding = false;
+          } else {
+            eventBus.emit('input:chatToggle');
+          }
+        }
+        return;
+      }
+
+      // Los demás solo reaccionan a Pressed
+      if (state !== 'Pressed') return;
+
+      switch (action) {
+        case 'visibility':
+          windowManager.toggleVisibility();
+          break;
+        case 'config':
+          configPanel.toggle();
+          break;
+        case 'debug': {
+          const on = toggleDebug();
+          bubble.show(on ? 'Debug activado' : 'Debug desactivado');
+          bubble.done();
+          break;
+        }
+        case 'reconnect':
+          server?.disconnect();
+          server?.connect();
+          bubble.show('Reconectando...');
+          bubble.done();
+          break;
+      }
+    });
+    dbg('main', 'global shortcuts listener registrado');
+  } catch (e) {
+    dbg('main', 'global shortcut listener falló:', e.message);
+  }
+
+  // Reconectar desde el tray
+  try {
+    const { listen: listenTray } = window.__TAURI__.event;
+    await listenTray('tray:reconnect', () => {
+      server?.disconnect();
+      server?.connect();
+    });
+  } catch (e) { dbg('main', 'tray listener error', e); }
+
+  // Iniciar HTTP API local si está habilitado en config
+  if (config.get('localApiEnabled')) {
+    try {
+      const port = config.get('localApiPort') || 17842;
+      const token = await window.__TAURI__.core.invoke('start_local_api', { port });
+      dbg('main', 'HTTP API iniciada en puerto', port, 'token:', token.substring(0, 8) + '...');
+    } catch (e) {
+      dbg('main', 'error iniciando HTTP API', e);
+    }
+  }
+
+  // HTTP API local — escuchar eventos del servidor HTTP
+  try {
+    const { listen: listenHttp } = window.__TAURI__.event;
+
+    await listenHttp('http-api:message', (event) => {
+      const text = event.payload?.text;
+      if (text && server?.connected) {
+        server.send(text);
+      }
+    });
+
+    await listenHttp('http-api:action', (event) => {
+      const action = event.payload?.action;
+      if (action) {
+        // Acciones simples: wave, happy, sad, thinking
+        switch (action) {
+          case 'wave':
+          case 'celebrating':
+            fsm.forceState('celebrating');
+            sprite.play('celebrate');
+            break;
+          case 'happy':
+            fsm.forceState('happy');
+            sprite.play('happy');
+            break;
+          case 'sad':
+            fsm.forceState('sad');
+            sprite.play('sad');
+            break;
+          case 'thinking':
+            fsm.forceState('thinking');
+            sprite.play('think');
+            break;
+          case 'idle':
+            fsm.forceState('idle');
+            sprite.play('idle');
+            break;
+        }
+      }
+    });
+
+    await listenHttp('http-api:webhook', (event) => {
+      const { event: evtName, data } = event.payload || {};
+      switch (evtName) {
+        case 'notify':
+          bubble.show(data?.text || data?.message || 'Notificación');
+          bubble.done();
+          break;
+        case 'mood':
+          if (data?.mood) {
+            fsm.forceState(data.mood);
+            const animMap = { happy: 'happy', sad: 'sad', thinking: 'think', celebrating: 'celebrate' };
+            sprite.play(animMap[data.mood] || data.mood);
+          }
+          break;
+      }
+    });
+
+    dbg('main', 'HTTP API listeners registrados');
+  } catch (e) { dbg('main', 'HTTP API listener error', e); }
+
+  // Inicializar action handler (ejecuta tools remotos del server)
+  initActionHandler((msg) => server.sendRaw(msg));
+  dbg('main', 'action handler inicializado');
+
+  // Conectar al server
+  dbg('main', 'conectando al server...');
+  server.connect();
+
+  dbg('main', 'init() completo');
 }
 
 init();
